@@ -1,111 +1,683 @@
 ---
-title: Introduction
-description: Overview of Mindbricks and its AI-powered backend generation capabilities
+title: Welcome
+description: 'From Concept to Cloud: AI-Powered Backends with Zero Entropy'
+---
+## **What is Mindbricks?**
+
+Mindbricks is not just another AI code generator—it's a paradigm shift in backend development.
+
+Designed for professionals building real-world systems, Mindbricks combines AI-driven design with a robust, ontology-based architecture to deliver production-ready microservices at scale. **"AI in Mindbricks focuses on designing structured backend architectures; Genesis turns these blueprints into fully operational code."** At the heart of the platform lies the **Mindbricks Pattern Ontology (MPO)**, a semantic framework that guides AI agents to produce consistent, modular, and maintainable systems without the chaos typically associated with generative AI.
+
+Your backend is not just imagined—it’s compiled. Mindbricks uses **Genesis**, a deterministic engine that transforms your semantic blueprint into real, testable, and deployable code. This ensures that every line is not only syntactically valid but also structurally sound.
+
+Whether you're launching a startup or scaling an enterprise system with dozens of microservices, Mindbricks offers a fully managed development experience—complete with automated code generation, infrastructure-ready deployment scripts, AI-enforced best practices, and zero guesswork.
+
+This is backend development, reimagined for the AI era.
+
+## How Mindbricks Works
+
+Mindbricks reimagines backend development by turning high-level design intent into production-grade systems. Its architecture is based on a powerful semantic engine and guided by AI. Here’s how it works in practice:
+
+### 1. Design with Patterns
+
+At the core of Mindbricks is the **Mindbricks Pattern Ontology (MPO)**—a structured set of reusable, meaningful building blocks. Instead of writing low-level configurations, developers define **data models, routes, permissions, validations, and logic** using these patterns. This creates a blueprint that is readable, modular, and semantically rich.
+
+### 2. Collaborate with AI
+
+Mindbricks AI doesn’t write random code—it assists you in building consistent, scalable architecture. It understands the MPO language and helps guide, correct, and enhance your designs. Whether you're defining access logic, refining data flow, or integrating services, AI acts as a smart co-pilot that respects the rules of your system.
+
+### 3. Compile with Genesis
+
+Once your design is complete, **Genesis**, the Mindbricks compiler, transforms your ontological model into fully typed, deterministic backend code. This includes:
+
+- RESTful APIs
+
+- Data access layers
+
+- Validation logic
+
+- Event handling
+
+- Internal service communication
+
+- Test scripts
+
+- Full API Documentation
+
+The result is high-quality codebases with zero boilerplate and maximum structure.
+
+### 4. Deploy with One Click—or Your Own Way
+
+Mindbricks offers **fully managed, one-click deployment** to a production-grade Kubernetes cloud. As soon as your services are generated, they can be instantly deployed, monitored, and scaled without needing to configure infrastructure or manage containers yourself.
+
+Behind the scenes, Mindbricks handles:
+
+- Kubernetes orchestration
+
+- Secure secrets and environment isolation
+
+- Auto-scaling and health checks
+
+- Build and deployment pipelines
+
+- TLS, domain, and routing setup
+
+For teams with existing DevOps infrastructure, **Mindbricks is equally flexible**—you can export the generated services, Dockerfiles, and deployment scripts to integrate seamlessly into your own CI/CD pipelines and cloud environments.
+
+Whether you want speed and simplicity or complete control, Mindbricks adapts to your workflow.
+
+### 5. Manage and Evolve
+
+Mindbricks doesn’t stop at code generation. It supports:
+
+- **Version-controlled migrations**
+
+- **Service lifecycle operations**
+
+- **Permission and session handling**
+
+- **Integration with logging, monitoring, and observability tools**
+
+This end-to-end lifecycle management ensures that your backend remains reliable, secure, and scalable from day one.
+
+## Working with Patterns
+
+At the heart of Mindbricks lies a powerful idea: **you build backends by composing patterns, not writing boilerplate**.
+
+Mindbricks introduces a formal, modular ontology called the **Mindbricks Pattern Ontology (MPO)**. These patterns act as high-level, structured blueprints that define your backend's:
+
+- **Data models**
+
+- **Business logic**
+
+- **Access rules and permissions**
+
+- **Routes and response behavior**
+
+- **External API interactions**
+
+- **Deployment and runtime behaviors**
+
+Each pattern is designed to be intuitive yet precise. For instance:
+
+- Define a `DataObject` to represent a table or collection
+
+- Attach `BusinessApi` patterns to specify how it's accessed
+
+- Apply `Validations`, `Permissions`, or `AggregatedData` to shape logic
+
+- Add `FetchOptions` or `ResponseSettings` to extend it
+
+Rather than writing imperative code, you **describe your backend using a pattern graph**, and Mindbricks’ AI understands your intent at every level.
+
+### Human-Centric, AI-Enhanced
+
+Patterns are readable, reusable, and editable by both humans and AI. You can create them visually, generate them with AI guidance, or edit them manually via structured editors.
+
+This approach brings a radical benefit: **AI outputs are no longer free-form and brittle**—they're structured, verifiable, and deterministic. Patterns bridge the gap between high-level design and low-level code, enabling the Genesis engine to generate safe, scalable, and fully deployable microservices.
+
+## Understanding the Genesis Engine
+
+**Genesis** is the core engine that transforms Mindbricks patterns into production-ready backend code. It doesn’t guess or improvise—it compiles.
+
+Every pattern you define in Mindbricks belongs to a **pattern class**. These classes carry structured meaning, relationships, and logic that describe how the backend should behave. When you finalize your service design, Genesis takes over and performs three critical steps:
+
+1. **Class Interpretation**
+   It reads each pattern instance (like `DataObject`, `BusinessApi`, `Permission`, etc.) and understands their semantic role within the service.
+
+2. **Template Compilation**
+   Genesis maps each pattern class to deterministic, production-grade **code templates**—ranging from database models and controllers to service logic and deployment files. These templates are not static; they are smartly parameterized and context-aware.
+
+3. **Compositional Logic**
+   It resolves pattern interactions. For example, if a `RouteValidation` pattern depends on a `FunctionCall`, which in turn accesses a `ForeignFetch`, Genesis wires them together correctly. It ensures all logic flows match the semantic structure you've defined.
+
+The result? Genesis compiles your service into a fully structured, modular microservice—including:
+
+- **Type-safe backend code**
+
+- **Validated API routes**
+
+- **Session-aware authentication logic**
+
+- **Deployment scripts and Dockerfiles**
+
+- **Documentation and Postman collections**
+
+All derived from your pattern graph.
+
+This compilation process eliminates code entropy, maximizes consistency, and allows your architecture to evolve safely with each change.
+
+## Effortless Deployment, Enterprise-Grade Infrastructure
+
+With Mindbricks, deploying your backend is not a process—it’s a **single action**. Behind that one click lies a full-scale infrastructure orchestration built for professional systems.
+
+### 🔧 Fully Managed Kubernetes Cloud
+
+Mindbricks deploys your services into **dedicated Kubernetes clusters**, provisioned and isolated per user. Your services run securely, with **auto-scaling enabled by default** to adapt to real-time load—no ops knowledge required.
+
+### 🧱 Default Services: Auth, BFF, and Notifications
+
+Every project is scaffolded with essential foundation services:
+
+- **Auth**: A secure, fully integrated authentication service with token and session support.
+
+- **BFF (Backend-for-Frontend)**: A dynamic proxy service that consolidates service responses for frontend consumption.
+
+- **Notifications**: A message service that delivers real-time updates via email, SMS, or in-app channels.
+
+### 📊 Robust Architecture Components
+
+Mindbricks doesn’t just deploy microservices—it wires them into a high-performing, event-driven architecture:
+
+- **PostgreSQL** (MongoDB support coming soon): Your relational data model is automatically applied, with all tables created and fully connected to APIs.
+
+- **Redis**: Instantly provisioned as a high-speed cache layer.
+
+- **Kafka**: Used for internal event streaming and cross-service communication.
+
+- **Elasticsearch**: Acts as a dedicated **MCMQ server** (Micro Command Macro Query)—Mindbricks’ improved take on CQRS. It handles complex aggregation queries and high-throughput read models.
+
+### 🧠 Zero-Knowledge Required
+
+You don’t need to configure Dockerfiles, Kubernetes manifests, Helm charts, or VPCs. Everything from container builds to database initialization is handled by Mindbricks in a **secure, fully abstracted pipeline**.
+
+Want to take control? Mindbricks also offers hooks to integrate your own CI/CD pipelines and take over the infrastructure if needed.
+
+Great choice. Here's a refined section titled **"Building Your First Microservice"**, written to fit naturally after the Deployment section and introduce users to the hands-on creation process within Mindbricks:
+
 ---
 
-## Getting Started with Mindbricks
+## Building Your First Microservice
 
-Mindbricks revolutionizes backend development by providing an AI architect, ontology engine, and cloud infrastructure that instantly generates working backends. This platform combines artificial intelligence with robust cloud deployment to streamline the creation of scalable applications.
+At the heart of every application in Mindbricks is a **microservice**—a focused, autonomous unit responsible for managing a specific business domain. Whether you're designing a product catalog, user profile system, or payment processor, your microservice will encapsulate the logic, data, and APIs it needs to function independently.
 
-<Columns cols={3}>
-  <Card title="AI Architect" icon="brain" href="#ai-architect" cta="Learn More">
-    Leverage advanced AI to design and generate backend architectures automatically.
-  </Card>
-  <Card title="Ontology Engine" icon="database" href="#ontology-engine" cta="Explore">
-    Manage complex data relationships and schemas with intelligent ontology processing.
-  </Card>
-  <Card title="Cloud Infrastructure" icon="cloud" href="#cloud-infrastructure" cta="Deploy">
-    Deploy instantly to scalable cloud environments with built-in monitoring.
-  </Card>
-</Columns>
+### 🧱 Start with the Data Model
 
-## Core Features
+Every microservice begins with **Data Objects**, which represent the tables or collections that store and organize your domain’s data. These objects aren’t just schemas—they’re **active entities**, enriched with built-in business rules, permissions, validations, and dynamic relationships.
 
-Mindbricks offers three interconnected components that work together to accelerate backend development:
+In just a few steps, you can:
 
-<Tabs>
-  <Tab title="AI Architect" icon="brain">
-    The AI architect analyzes your requirements and generates complete backend structures, including APIs, databases, and business logic. It uses machine learning to optimize for performance and scalability.
-    
-    <Callout kind="info">The AI architect can generate backends in under 5 minutes from natural language descriptions.</Callout>
-    
-    <CodeGroup tabs="Python,Node.js">
-      ```python
-import mindbricks
+- Define fields, types, defaults, and constraints
 
-# Generate a user management backend
-backend = mindbricks.generate_backend({
-    "type": "user_management",
-    "features": ["auth", "profile", "permissions"],
-    "database": "postgresql"
-})
+- Connect your object to other objects (foreign keys or service-wide references)
+
+- Control access using **ownership**, **roles**, or **custom conditions**
+
+### 🛠 Define the Behavior with Routes
+
+Once your data model is in place, Mindbricks allows you to generate fully functional REST routes with a few clicks. These include:
+
+- **CRUD routes** with customizable logic
+
+- **Bulk operations** for mass updates or deletes
+
+- **Custom endpoints** using edge controllers or AI-enhanced filters
+
+Each route is automatically wired to your data object and exposed through your service’s public API.
+
+### 🧠 Enrich Logic with Patterns
+
+Want to fetch external data before writing? Add a **ForeignFetch** or **FunctionCall**.
+Need to validate or transform input? Use the **Validation**, **MScript**, or **HookFunction** patterns.
+Working with nested data? Use **AggregatedCrud** to update child records alongside a parent object.
+
+Everything follows a pattern-first design so the **AI agents and the Genesis compiler** can reason about your logic, generate precise code, and keep the structure maintainable.
+
+### 🔗 Connected, Secure, Scalable
+
+Each microservice automatically:
+
+- Authenticates requests via the shared Auth service
+
+- Publishes/consumes events through Kafka
+
+- Logs structured data and exposes observability hooks
+
+- Gets deployed with load balancing, scaling, and storage included
+
+You can build one microservice or a hundred—the experience remains consistent, scalable, and fast.
+
+## Connecting Microservices and Events
+
+In a modern backend architecture, services rarely operate in isolation. They must collaborate, respond to each other's changes, and maintain consistency across boundaries. Mindbricks embraces this reality by making both synchronous communication and event-driven design first-class citizens of the platform.
+
+---
+
+### Service-to-Service Communication Made Simple
+
+Mindbricks allows microservices to communicate securely and declaratively. Using the `InterserviceCalls` pattern, one service can invoke logic exposed by another—without worrying about low-level request handling, token management, or error propagation. Authentication is handled transparently, and service-level permissions are enforced automatically based on your configuration.
+
+This makes cross-service orchestration seamless and consistent, even in complex workflows.
+
+---
+
+### Events as a First-Class Pattern
+
+Mindbricks services are not only connected—they're reactive. Every service can emit domain events when something meaningful happens: a user signs up, a payment is received, or a profile is updated.
+
+By default, Mindbricks provisions a dedicated Kafka cluster for every deployed project. Events can be published automatically based on pattern configurations, using triggers like `afterCreate`, `afterUpdate`, or custom script-based logic. Other services can subscribe to these events and react accordingly.
+
+This enables true decoupling: a service emits what happened, not who needs to know.
+
+---
+
+### Merging Distributed Data with MCMQ
+
+While interservice calls and event flows are essential, making too many synchronous requests between services can create tight coupling and performance bottlenecks. Mindbricks introduces **MCMQ (Micro Command Macro Query)** — an evolution of the CQRS pattern — to solve this problem.
+
+With MCMQ, each service manages its own write model and event stream, but contributes **read-side projections** to a shared, denormalized **aggregation layer** powered by **Elasticsearch**. This allows the system to:
+
+- **Merge distributed data across services** for fast, complex queries
+
+- **Avoid chaining interservice calls** for every piece of data
+
+- **Serve the frontend (BFF) with pre-joined, optimized views**
+
+For example, a customer dashboard might need order history from one service, support tickets from another, and real-time delivery status from a third. With MCMQ, all this data is aggregated and queryable through a single Elasticsearch query—no roundtrips required.
+
+The aggregation logic is defined declaratively using Mindbricks patterns, and updates are propagated through the event system.
+
+---
+
+### Declarative Event Definition
+
+Events in Mindbricks are not hardcoded in business logic. Instead, you define them declaratively:
+
+- Specify **when** the event should be emitted (e.g. `afterUpdate`)
+
+- Define **what data** it should include using MScript
+
+- Choose **how** it should be delivered (internal Kafka, notification system, or future external buses)
+
+These definitions live in your patterns, version-controlled alongside your architecture, and can evolve with your product logic.
+
+---
+
+### Real-Time Messaging and Notifications
+
+Some events aren’t just for systems—they’re for people. Mindbricks comes with a built-in **Notification Service** that turns system events into messages sent to users via:
+
+- Email
+
+- SMS
+
+- Push notifications
+
+- In-app messages
+
+This service listens to your defined events and translates them into user-facing messages using templates and rules defined in your project ontology.
+
+---
+
+### Tracing, Contracts, and Observability
+
+Mindbricks automatically logs interservice calls and emitted events, letting you trace the lifecycle of a request across the system. Microservices expose OpenAPI contracts, making integrations verifiable and accessible for both humans and AI agents. Future updates will introduce full distributed tracing via **OpenTelemetry**, retry strategies, and more robust observability features.
+
+---
+
+**Conclusion**
+
+Mindbricks transforms backend systems from isolated services into a coordinated, intelligent network. With declarative event handling, interservice orchestration, the MCMQ query layer, and built-in messaging infrastructure, your architecture becomes both reactive and highly efficient—ready for real-world scale.
+
+## Testing and Monitoring
+
+Mindbricks equips you with a complete suite of testing and monitoring tools to ensure your backend is robust, verifiable, and production-ready. Whether you're testing your APIs manually, integrating automated validation, or tracking system health in real time, everything is designed to work out of the box.
+
+---
+
+### Multiple Interfaces for API Testing
+
+#### 🧪 APIFace – The AI-Enhanced Testing Playground
+
+Mindbricks introduces **APIFace**, a modern alternative to Swagger UI. Designed with developer experience in mind, APIFace:
+
+- Provides a **visual, human-readable interface** for testing all routes of a service
+
+- Supports **header management**, **request context emulation**, and **AI-powered suggestions**
+
+- Allows authenticated testing using your current login session
+
+- Integrates tightly with the semantic patterns of your service, highlighting available route features, validations, and role permissions
+
+Whether you're testing a `GET` route with a deep query filter or simulating a complex transaction on a child object, APIFace helps you understand, test, and debug efficiently—without switching tools or writing manual requests.
+
+#### 📘 Swagger UI
+
+Mindbricks automatically generates Swagger documentation for every service, compatible with OpenAPI standards. You can:
+
+- Browse endpoints in a structured format
+
+- Execute requests with real parameters
+
+- Download the Swagger schema for external integration
+
+This is perfect for teams that rely on existing Swagger-based workflows or need to generate client SDKs.
+
+#### 📬 Postman Collections
+
+For more advanced testing scenarios, Mindbricks also generates full **Postman collections** for every service:
+
+- Includes pre-configured routes with parameters and authentication
+
+- Can be imported directly into your CI/CD pipeline
+
+- Useful for load testing, regression testing, and API contract verification
+
+---
+
+### Declarative Testing and Validations
+
+Mindbricks allows you to define validations and test logic right within your route definitions:
+
+- Layer-specific **route validations** using MScript
+
+- **Stored assertions** to be reused in other logic (e.g. permissions, roles)
+
+- **Test endpoints** and **mock setups** for simulating edge cases or sandbox flows
+
+These declarative tests help enforce correctness across services while preserving maintainability.
+
+---
+
+### Live Logs and Service Visibility
+
+All services are deployed with **live, structured logging**, accessible via the dashboard:
+
+- Inspect HTTP request logs by service and route
+
+- View trace-level logs for events, database operations, and interservice calls
+
+- Filter logs by user, session, or error type
+
+- Export logs for external monitoring tools or audits
+
+---
+
+### Health Checks and System Probes
+
+Behind the scenes, Mindbricks configures:
+
+- **Health checks** for every microservice instance
+
+- **Readiness probes** for Kubernetes auto-scaling and routing
+
+- **Alerting hooks** for system failure detection
+
+You can extend these with custom logic to validate external APIs, cache layers, or domain-specific metrics.
+
+---
+
+### Future Enhancements (Coming Soon)
+
+Mindbricks is preparing a set of observability features including:
+
+- Distributed tracing via **OpenTelemetry**
+
+- **Performance dashboards** per route and service
+
+- **Real-time alerts** for latency, error spikes, and business rule violations
+
+- Session-level **replay and audit trails** for critical workflows
+
+---
+
+**Summary**
+
+Testing in Mindbricks isn't just about sending requests—it's about understanding, validating, and continuously improving your backend system. With Swagger, Postman, and APIFace working in harmony, you get intuitive access and professional-grade visibility for every route you deploy.
+
+## 🔒 Security and Compliance
+
+Mindbricks is built with a security-first philosophy, enabling you to launch scalable microservice backends with enterprise-grade protection from day one. From authentication to encryption, and from role-based access to PCI compliance, Mindbricks gives you both out-of-the-box security and deep customization options.
+
+---
+
+### 🧑‍💼 Role-Based Access Control (RBAC)
+
+Every service in Mindbricks supports **fine-grained authorization**:
+
+- Define roles such as `admin`, `editor`, `viewer`, or custom ones like `vendor` or `moderator`
+
+- Assign permissions to routes, actions, and even field-level operations
+
+- Integrate dynamic conditions via **MScript**, enabling complex access logic (e.g. “users can only update their own data unless they are supervisors”)
+
+These rules are enforced automatically during code generation and runtime.
+
+---
+
+### 🔑 Secure Authentication
+
+Mindbricks includes a built-in **Auth service** that powers all login, session, and token management:
+
+- Supports **JWT-based login** with secure cookie storage or header tokens
+
+- Enables login via **email/password**, **mobile OTP**, **social login** (Google, Apple), or **enterprise SSO**
+
+- Allows **session introspection**, **revocation**, and **two-factor authentication** using configuration only
+
+You can also override the default auth behavior with your own service or plug into external identity providers.
+
+---
+
+### 🔐 Field-Level and Contextual Protection
+
+Sensitive fields (e.g. passwords, payment tokens, emails) can be:
+
+- Automatically **excluded from responses**
+
+- Encrypted before storage (optional encryption strategies)
+
+- Controlled with **response-level permissions**, even within nested objects
+
+You can also define **read-only** or **immutable** fields that cannot be updated once created, unless escalated privileges are granted.
+
+---
+
+### 📜 PCI & Compliance Readiness
+
+Mindbricks is designed to align with modern compliance requirements:
+
+- Generated code avoids anti-patterns that would break **PCI-DSS**, **GDPR**, or **SOC2** guidelines
+
+- Authentication sessions can be stored in **Redis**, enabling centralized session invalidation
+
+- Audit trails, field masking, token expiration, and traceability are supported at the pattern level
+
+If you're building a product with financial, healthcare, or legal implications, Mindbricks helps keep your architecture compliant by default.
+
+---
+
+### 🧾 Secure Code Generation
+
+The Genesis engine ensures that the generated backend:
+
+- Follows **least privilege** access principles
+
+- Prevents **parameter injection**, **unauthorized field overwrites**, and **ID spoofing**
+
+- Injects **input validation**, **ownership verification**, and **anti-tampering hooks** into generated routes
+
+You never have to worry about introducing vulnerabilities by forgetting to write security logic—the code is secure by construction.
+
+---
+
+### 🛡️ Service Isolation and Network Security
+
+When deployed on the Mindbricks cloud:
+
+- Every microservice runs in **an isolated Kubernetes namespace**
+
+- Internal communication is encrypted via **mTLS**
+
+- Each service has scoped permissions to databases, queues, and caches
+
+- Public endpoints are protected by **rate limiting**, **firewalls**, and **API gateway policies**
+
+Private services and internal-only endpoints are fully supported.
+
+---
+
+### 🔄 Secure Interservice Communication
+
+Mindbricks uses **Kafka** and **interservice calls** for distributed workflows:
+
+- You can define which services can publish/subscribe to specific topics
+
+- All event data is typed and validated via the pattern layer
+
+- Services authenticate their requests using **internal service tokens**, automatically rotated and secured
+
+---
+
+### Summary
+
+Mindbricks doesn't just offer security as a checkbox—it deeply embeds it into your system's architecture. Whether you're building internal tools or publicly exposed SaaS platforms, Mindbricks ensures your services are trustworthy, secure, and built to meet modern compliance standards.
+
+## 🧩 Extending with Custom Logic
+
+While Mindbricks provides an extensive set of patterns and configuration options, real-world projects often require custom behaviors that go beyond declarative design. Mindbricks allows you to seamlessly extend your backend using **JavaScript-based modules**, executed at defined hook points or custom controllers — without breaking the generated architecture.
+
+---
+
+### 🔧 Lib Functions: Reusable Logic Blocks
+
+You can define **Lib functions** as standalone JavaScript modules that are:
+
+- Injected into validation scripts, computed fields, fetches, and hooks
+
+- Automatically available across all services (Project Library) or scoped to individual services (Service Library)
+
+- Fully testable, versioned, and managed within the platform
+
+Example:
+
+```javascript
+// lib/capitalizeFirstLetter.js
+module.exports = function capitalizeFirstLetter(str) {
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
 ```
-      ```javascript
-const mindbricks = require('mindbricks');
 
-// Generate API with authentication
-mindbricks.generate({
-    type: 'api',
-    endpoints: ['users', 'posts'],
-    auth: 'jwt'
-});
+Use it in your validation or MScript logic like:
+
+```javascript
+this.formattedName = capitalizeFirstLetter(this.name);
 ```
-    </CodeGroup>
-  </Tab>
-  <Tab title="Ontology Engine" icon="database">
-    The ontology engine manages complex data relationships and provides intelligent schema generation. It automatically creates database schemas, migrations, and relationships based on your domain model.
-    
-    <Expandable title="How Ontology Processing Works" default-open="false">
-      The engine uses graph theory and semantic analysis to understand data relationships, generating optimized database structures that evolve with your application needs.
-    </Expandable>
-  </Tab>
-  <Tab title="Cloud Infrastructure" icon="cloud">
-    Deploy your generated backends instantly to cloud platforms like AWS, GCP, or Azure. Mindbricks provides auto-scaling, monitoring, and security out of the box.
-    
-    <Steps>
-      <Step title="Connect Cloud Account" icon="cloud">
-        Link your cloud provider account through the Mindbricks dashboard.
-      </Step>
-      <Step title="Generate Backend" icon="code">
-        Use the AI architect to create your backend specification.
-      </Step>
-      <Step title="Deploy" icon="rocket">
-        Click deploy and watch your backend go live in minutes.
-      </Step>
-    </Steps>
-  </Tab>
-</Tabs>
 
-<Callout kind="tip">Start with a simple project to explore Mindbricks capabilities, then scale up to complex enterprise applications.</Callout>
+---
 
-## Use Cases
+### ⚙️ Edge Functions: Full Control with Custom Controllers
 
-Mindbricks serves various development scenarios:
+When you need **total freedom**, use **Edge Controllers**:
 
-- **Rapid Prototyping**: Generate functional backends in minutes for proof-of-concepts
-- **Startup MVPs**: Build scalable foundations without extensive development teams
-- **Enterprise Applications**: Create complex, secure backends with AI assistance
-- **API Development**: Automatically generate REST and GraphQL APIs with documentation
+- Define your own REST endpoint (`/custom/report`)
 
-The platform supports multiple programming languages and database systems, making it adaptable to different technology stacks and team preferences.
+- Implement any logic, query, or API call using plain JavaScript
 
-## Getting Started
+- Access the request, session, DB layer, Redis, or any custom module
 
-To begin using Mindbricks:
+Example:
 
-1. Create an account on the Mindbricks platform
-2. Describe your backend requirements in natural language
-3. Let the AI architect generate your initial structure
-4. Customize and refine using the ontology engine
-5. Deploy to your preferred cloud infrastructure
+```javascript
+// lib/helloWorld.js
+module.exports = async (request) => {
+  return {
+    message: `Hello, ${request.session.userId}`,
+    time: new Date().toISOString(),
+  };
+}
+```
 
-Mindbricks handles the heavy lifting of backend architecture, allowing developers to focus on business logic and user experience.
+Edge functions are ideal for:
 
-<ExpandableGroup>
-  <Expandable title="What makes Mindbricks different from traditional backend frameworks?" default-open="false">
-    Unlike traditional frameworks that require manual coding of every component, Mindbricks uses AI to generate complete, working backends from high-level descriptions. This dramatically reduces development time while maintaining high quality and scalability.
-  </Expandable>
-  <Expandable title="Is Mindbricks suitable for production applications?" default-open="false">
-    Yes, Mindbricks generates production-ready code with security best practices, performance optimizations, and monitoring capabilities built-in. Many enterprises use Mindbricks for rapid development and deployment.
-  </Expandable>
-</ExpandableGroup>
+- Building custom reporting endpoints
+
+- Integrating with third-party APIs
+
+- Handling legacy workflows or complex multi-tenant logic
+
+---
+
+### 🧠 AI-Aware Extensibility
+
+All custom logic is integrated into the Mindbricks ontology:
+
+- Your functions appear in autocomplete suggestions
+
+- AI agents can reason about your logic and include it in validations or fetches
+
+- Hooks and edge controllers are versioned and safely recompiled with each deployment
+
+---
+
+### 🧳 Asset & Template Support
+
+Need to send a PDF, generate HTML, or include custom files?
+
+- Upload assets (e.g. logos, credentials, HTML snippets)
+
+- Use **EJS templates** to generate dynamic content from data
+
+- Integrate with rendering engines or mailers via custom logic
+
+---
+
+### 🔁 Seamless Deployment
+
+Whether you’re adding a hook or a full edge function, all custom modules are:
+
+- Automatically bundled into the deployment package
+
+- Tested and verified during build
+
+- Observable in logs and debug traces
+
+You get the power of full-stack extensibility without sacrificing structure, security, or consistency.
+
+---
+
+### Summary
+
+Mindbricks gives you the best of both worlds: a powerful declarative system to build scalable services, and an escape hatch to write code when you need it. Whether you're embedding custom validators, transforming queries, or building high-performance endpoints — your logic fits naturally into the system.
+
+## 🚀 From Vision to Production
+
+Mindbricks is not just a tool — it's a complete philosophy for building, scaling, and evolving professional backends with confidence and clarity.
+
+By combining semantic pattern design, AI-assisted architecture, deterministic code generation, and managed deployment, Mindbricks enables you to:
+
+- **Design better** with reusable patterns and AI-powered guidance
+
+- **Develop faster** with instant code and schema generation
+
+- **Deploy smarter** with one-click Kubernetes infrastructure
+
+- **Scale securely** using isolated multi-service environments and built-in auth
+
+- **Extend freely** with hooks, edge controllers, and fully customizable libraries
+
+- **Collaborate consistently** with structured logic and versioned architecture
+
+- **Monitor continuously** via built-in API testing and observability tools
+
+Whether you're launching your first microservice or orchestrating a platform with dozens of services, Mindbricks adapts to your ambition — eliminating boilerplate and empowering your team to focus on what truly matters: **your product logic and business goals**.
+
+---
+
+### 🔮 Ready to Start?
+
+Begin by defining your first project. Then:
+
+1. **Add services** for each business domain
+
+2. **Define your data objects** and related patterns
+
+3. **Leverage AI** to configure routes, validations, and permissions
+
+4. **Preview the generated code** and simulate your API
+
+5. **Deploy instantly** — or export to integrate with your pipelines
+
+From idea to infrastructure, from prototype to production — **Mindbricks is your launchpad**.
+
+Welcome to the future of backend development.

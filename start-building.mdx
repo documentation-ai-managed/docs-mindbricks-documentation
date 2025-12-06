@@ -1,0 +1,737 @@
+---
+title: Designing an Application in Mindbricks
+---
+## Scope
+
+Mindbricks is an AI-powered, pattern-driven platform for generating and deploying microservice-based backends.
+This document is designed to guide both **human architects** and **AI agents** in collaboratively designing scalable, maintainable backend applications using the **Mindbricks Pattern Ontology (MPO)**.
+
+It is recommended to read this document alongside the \[Mindbricks Pattern Reference Guide], especially when configuring specific modules such as Authentication, BFF, Libraries, and Services. This guide focuses primarily on the **MindbricksApplication** pattern and its associated project-level settings, with references to other documents for detailed configuration of submodules.
+
+---
+
+## Understanding Pattern Configuration
+
+Mindbricks application development is fundamentally about consuming, combining, and configuring patterns—each representing reusable semantic building blocks for data models, services, behaviors, and integrations.
+
+This document uses **JavaScript-style object path notation** to reference and illustrate specific pattern configurations. For example:
+
+```javascript
+authentication.loginDefinition.userSettings.userNameType = "asFullname";
+```
+
+This sets the `userNameType` property under the `userSettings` node of the `loginDefinition` in the `authentication` module.
+
+### Interpreting Paths
+
+- **For Human Architects**:
+  The path notation should be interpreted as a visual navigation guide within the Mindbricks UI.
+
+- **For AI Agents**:
+  The path defines the location of a property in the application’s internal semantic JSON model. It indicates that the architect intends to set a specific configuration value within the nested pattern structure.
+
+## The `MindbricksApplication` Pattern
+
+The `MindbricksApplication` pattern serves as the **root pattern** of every Mindbricks project. It defines the global blueprint of the application, including project-level configuration, shared services (such as authentication and notification), deployment options, and other foundational elements. This is the primary entry point from which all architectural decisions flow.
+
+In Mindbricks, building an application starts with configuring this pattern—either manually through the UI or programmatically via AI—before extending it into its modular components such as services, libraries, and shared infrastructure.
+
+### Purpose and Role
+
+The `MindbricksApplication` pattern orchestrates:
+
+- **Global application metadata** (project name, description, ownership)
+
+- **Authentication and session settings**
+
+- **BFF (Backend-for-Frontend) integration**
+
+- **Project-wide libraries (functions, assets, templates)**
+
+- **Deployment preferences and hosting settings**
+
+- **Service registration and inter-service communication logic**
+
+- **AI support and assistant behavior configuration**
+
+- **Infrastructure preferences (databases, message queues, caching, etc.)**
+
+Once initialized, the application becomes the container for all services and shared modules. Each microservice will be defined within the scope of this root application and inherit relevant settings unless explicitly overridden.
+
+### Minimal Initialization
+
+Every Mindbricks application begins with a core project configuration defined by the `MindbricksApplication` pattern. This configuration can be established either:
+
+- **Programmatically** by an AI agent using a structured JSON definition, or
+
+- **Interactively** by a human architect using the visual Mindbricks design interface.
+
+At a minimum, you must define the **project name**, **display title**, and a **description**. These foundational fields establish your application's identity across services, UI modules, and documentation.
+
+#### JSON-Based Example (AI Initialization)
+
+```json
+{
+  "projectSettings": {
+    "basicSettings": {
+      "name": "MyApp",
+      "fullname": "MyApp Personal Todo List",
+      "description": "A personal task management application"
+    }
+  }
+}
+```
+
+- `name`: A short, machine-readable identifier used internally and in URLs.
+
+- `fullname`: A human-readable project name shown in admin UIs and documentation.
+
+- `description`: A short text explaining the purpose and scope of the application.
+
+#### UI-Based Initialization (Human Architect)
+
+To set up this same configuration in the design interface:
+
+1. Navigate to the **Project Settings** module.
+
+2. Under **Basic Settings**, enter:
+
+   - **Name**: `MyApp`
+
+   - **Full Name**: `MyApp Personal Todo List`
+
+   - **Description**: `A personal task management application`
+
+This initialization enables Mindbricks to scaffold your application, including authentication services, deployment templates, and UI labeling across modules.
+
+When you create a new project in the UI, these minimal fields are also included in the project creation form, allowing you to initialize the project with a clear identity from the beginning. You can always refine them later in the Project Settings panel.
+
+### AI Guidance
+
+Mindbricks includes intelligent suggestions for filling out the `MindbricksApplication` pattern. If you're unsure which modules you need, the AI assistant can infer your architecture based on business goals, user flows, or even natural language prompts.
+
+## Configuring Project Settings
+
+The `projectSettings` object holds the foundational configurations that shape the behavior and capabilities of your Mindbricks application. While Mindbricks provides smart defaults, it is important to review and adjust key settings early in the design process to ensure that the generated backend reflects your application’s functional and architectural needs.
+
+This section breaks down the major configuration areas under `projectSettings`:
+
+---
+
+Certainly! Here's the revised **Basic Settings** explanation for your documentation, updated to reflect the structure and nature of the `DataMapItem` pattern used for `customVariables`:
+
+---
+
+Certainly! Here's the revised **Basic Settings** section with **UI Navigation Hints** included for each field, guiding human architects through the Mindbricks design interface:
+
+---
+
+### 🔧 Basic Settings
+
+The `basicSettings` object defines the foundational identity and configuration of your Mindbricks project. These values are used throughout the system—for naming, documentation, deployment, and runtime behavior.
+
+```javascript
+projectSettings.basicSettings = {
+  name: "MyApp",
+  fullname: "MyApp Personal Todo List",
+  description: "A personal task management application",
+  icon: "https://example.com/icon.png",
+  status: "design",
+  customVariables: [
+    { name: "ENV", value: `"development"` },
+    { name: "DEFAULT_LANGUAGE", value: `"en"` }
+  ]
+};
+```
+
+Each field plays a key role in establishing the identity and behavior of the project:
+
+- **`name`**
+  The short, required name of the project (e.g., `myapp`).
+  📍 *UI Hint:* Go to **Project → Project Settings → Basic Settings → Name**.
+
+- **`fullname`**
+  A human-friendly title for the project shown in dashboards and documentation (e.g., "MyApp Personal Todo List").
+  📍 *UI Hint:* **Project → Project Settings → Basic Settings → Fullname**.
+
+- **`description`**
+  A long-form description that outlines the purpose and scope of the project. Used in project documentation and onboarding.
+  📍 *UI Hint:* **Project → Project Settings → Basic Settings → Description**.
+
+- **`icon`**
+  (Optional) A URL pointing to the project’s icon. This image is shown in project menus, dashboards, and documentation.
+  📍 *UI Hint:* **Project → Project Settings → Basic Settings → Icon**.
+
+- **`status`**
+  Indicates the current lifecycle stage of the project. Options:
+
+  - `"design"` (default): Under development
+
+  - `"staging"`: Ready for testing
+
+  - `"production"`: Live deployment
+    📍 *UI Hint:* **Project → Project Settings → Basic Settings → Status**.
+
+- **`customVariables`**
+  Environment-specific variables defined as an array of key-value pairs. Each item is a `DataMapItem`, with:
+
+  - `name`: Variable name (e.g., `"ENV"`)
+
+  - `value`: MScript expression or static value (e.g., `"production"`)
+    📍 *UI Hint:* **Project → Project Settings → Basic Settings → Custom Variables → Add New Item**
+
+### 🧠 Redis Settings
+
+By default, Mindbricks provisions a fully managed Redis instance for each project, used for caching, session handling, and performance-critical data flows. If your infrastructure requires a **custom Redis server**, you can override the default behavior using the `redisSettings` configuration.
+
+```javascript
+projectSettings.redisSettings = {
+  useCustomRedisServer: true,
+  redisHost: "redis.mycompany.com",
+  redisPort: 6379,
+  user: "admin",
+  password: "securepass123"
+};
+```
+
+This section is optional and should only be configured if you **do not** want to use the managed Redis provided by Mindbricks.
+
+#### Configuration Fields
+
+- **`useCustomRedisServer`**
+  Boolean flag to indicate if your own Redis server should be used.
+  Set to `true` to enable custom Redis configuration.
+  📍 *UI Hint:* **Project → Project Settings → Redis Settings → Use Custom Redis Server**
+
+- **`redisHost`**
+  The hostname or IP address of your Redis instance (e.g., `redis.mycompany.com`).
+  📍 *UI Hint:* **Project → Project Settings → Redis Settings → Redis Host**
+
+- **`redisPort`**
+  The Redis port number. Default is `6379`.
+  📍 *UI Hint:* **Project → Project Settings → Redis Settings → Redis Port**
+
+- **`user`**
+  Optional Redis username if authentication is required.
+  📍 *UI Hint:* **Project → Project Settings → Redis Settings → User**
+
+- **`password`**
+  Password for authenticating with your Redis instance.
+  📍 *UI Hint:* **Project → Project Settings → Redis Settings → Password**
+
+### 🧠 PostgreSQL Settings
+
+Mindbricks provides a **managed PostgreSQL database** for each service in your project. This setup is ideal for most users, ensuring seamless provisioning, secure connections, and out-of-the-box schema management.
+
+However, if your infrastructure requires **connecting to a self-managed PostgreSQL instance**, you can override the default behavior using the `postgreSqlSettings` configuration:
+
+```javascript
+projectSettings.postgreSqlSettings = {
+  useCustomPostgresqlServer: true,
+  host: "db.mycompany.com",
+  port: 5432,
+  user: "dbadmin",
+  password: "securepass456"
+};
+```
+
+This configuration is optional. Mindbricks will automatically use its own managed PostgreSQL if this section is left unconfigured or `useCustomPostgresqlServer` is set to `false`.
+
+#### Configuration Fields
+
+- **`useCustomPostgresqlServer`**
+  Boolean value indicating whether to override the managed PostgreSQL server with your own.
+  📍 *UI Hint:* **Project → Project Settings → PostgreSQL Settings → Use Custom PostgreSQL Server**
+
+- **`host`**
+  Hostname or IP address of your custom PostgreSQL database server (e.g., `db.mycompany.com`).
+  📍 *UI Hint:* **Project → Project Settings → PostgreSQL Settings → Host**
+
+- **`port`**
+  Port number for PostgreSQL. Default is usually `5432`.
+  📍 *UI Hint:* **Project → Project Settings → PostgreSQL Settings → Port**
+
+- **`user`**
+  Username for authenticating with your PostgreSQL server.
+  📍 *UI Hint:* **Project → Project Settings → PostgreSQL Settings → User**
+
+- **`password`**
+  Password for the above user to connect securely.
+  📍 *UI Hint:* **Project → Project Settings → PostgreSQL Settings → Password**
+
+### 🍃 MongoDB Settings
+
+Mindbricks offers a **managed MongoDB instance for each service** by default, ensuring streamlined schema provisioning, high availability, and tight integration with your generated code.
+
+However, if your project architecture requires connecting to an **external or self-managed MongoDB cluster**, you can override the default by configuring `mongoDbSettings`:
+
+```javascript
+projectSettings.mongoDbSettings = {
+  useCustomMongoDbServer: true,
+  host: "mongo.myinfra.io",
+  port: 27017,
+  user: "mongoAdmin",
+  password: "secureMongoPass"
+};
+```
+
+When `useCustomMongoDbServer` is set to `false` or the entire block is omitted, Mindbricks will provision and manage the MongoDB infrastructure for you.
+
+#### Configuration Fields
+
+- **`useCustomMongoDbServer`**
+  Enables the use of a custom MongoDB instance instead of Mindbricks' managed service.
+  📍 *UI Hint:* **Project → Project Settings → MongoDB Settings → Use Custom MongoDB Server**
+
+- **`host`**
+  The hostname or IP address of your MongoDB server.
+  📍 *UI Hint:* **Project → Project Settings → MongoDB Settings → Host**
+
+- **`port`**
+  Port used by the MongoDB server, typically `27017`.
+  📍 *UI Hint:* **Project → Project Settings → MongoDB Settings → Port**
+
+- **`user`**
+  The username used to authenticate with your custom MongoDB server.
+  📍 *UI Hint:* **Project → Project Settings → MongoDB Settings → User**
+
+- **`password`**
+  The password corresponding to the above username.
+  📍 *UI Hint:* **Project → Project Settings → MongoDB Settings → Password**
+
+### 🔍 Elasticsearch Settings
+
+Mindbricks automatically provisions a **managed Elasticsearch cluster** for all full-text search, advanced querying, and **MCMQ (Micro Command Macro Query)** features used in your services. This setup is production-grade, scalable, and tightly integrated with generated APIs.
+
+If your organization requires using a **custom Elasticsearch deployment**, such as a self-hosted or enterprise-managed cluster, you can override the default behavior by configuring `elasticSearchSettings`.
+
+```javascript
+projectSettings.elasticSearchSettings = {
+  useCustomElasticSearchServer: true,
+  elasticSearchUri: "https://search.myinfra.io:9200",
+  user: "elasticUser",
+  password: "securePassword"
+};
+```
+
+When `useCustomElasticSearchServer` is set to `false` or this configuration block is not defined, Mindbricks uses its internal cluster automatically.
+
+#### Configuration Fields
+
+- **`useCustomElasticSearchServer`**
+  Boolean toggle to indicate whether to bypass the default Mindbricks-managed Elasticsearch instance.
+  📍 *UI Hint:* **Project → Project Settings → Elasticsearch Settings → Use Custom Elasticsearch Server**
+
+- **`elasticSearchUri`**
+  The full URI to connect to your custom Elasticsearch endpoint (e.g., `https://host:port`).
+  📍 *UI Hint:* **Project → Project Settings → Elasticsearch Settings → URI**
+
+- **`user`**
+  Username used to authenticate with your Elasticsearch instance.
+  📍 *UI Hint:* **Project → Project Settings → Elasticsearch Settings → User**
+
+- **`password`**
+  Password corresponding to the specified username.
+  📍 *UI Hint:* **Project → Project Settings → Elasticsearch Settings → Password**
+
+### 🧩 Apache Kafka Settings
+
+Mindbricks includes a **fully managed Kafka instance** by default, preconfigured for event streaming, inter-service messaging, and saga orchestration. This infrastructure is automatically provisioned and integrated into your backend with no setup required.
+
+If you prefer to use your own **custom Kafka cluster**, you can override the default by providing the connection details here.
+
+```javascript
+projectSettings.apacheKafkaSettings = {
+  useCustomKafkaServer: true,
+  kafkaUri: "kafka://my-kafka-broker:9092"
+};
+```
+
+#### Configuration Fields
+
+- **`useCustomKafkaServer`**
+  Indicates whether to use your own Kafka setup instead of Mindbricks’ managed Kafka instance.
+  📍 *UI Navigation:* **Project → Project Settings → Kafka Settings → Use Custom Kafka Server**
+
+- **`kafkaUri`**
+  The full URI of your Kafka broker or cluster.
+  📍 *UI Navigation:* **Project → Project Settings → Kafka Settings → Kafka URI**
+
+### 📧 SMTP Settings
+
+Mindbricks includes a **managed cloud-based email service** by default for sending operational and notification emails (e.g., verification codes, password resets). However, if you prefer to route your application's emails through a **custom SMTP server**, you can configure it here.
+
+```javascript
+projectSettings.smtpSettings = {
+  useCustomSmptServer: true,
+  emailFrom: "no-reply@myapp.com",
+  emailHost: "smtp.mailprovider.com",
+  emailPort: 587,
+  emailUser: "smtp_user",
+  emailPass: "smtp_password",
+  isSecure: true
+};
+```
+
+#### Configuration Fields
+
+- **`useCustomSmptServer`**
+  Set to `true` to enable your custom SMTP configuration. If `false`, Mindbricks will use its managed provider.
+  📍 *UI Navigation:* **Project → Project Settings → SMTP Settings → Use Custom SMTP Server**
+
+- **`emailFrom`**
+  The default "from" address used in emails sent by your application.
+  📍 *UI Navigation:* **Project → Project Settings → SMTP Settings → Sender Email Address**
+
+- **`emailHost`**
+  The hostname or IP address of your SMTP server (e.g., `smtp.gmail.com`).
+  📍 *UI Navigation:* **Project → Project Settings → SMTP Settings → SMTP Host**
+
+- **`emailPort`**
+  The port your SMTP server listens on (commonly 465 for SSL or 587 for TLS).
+  📍 *UI Navigation:* **Project → Project Settings → SMTP Settings → Port**
+
+- **`emailUser`**
+  The username used to authenticate with the SMTP server.
+  📍 *UI Navigation:* **Project → Project Settings → SMTP Settings → Username**
+
+- **`emailPass`**
+  The password used for SMTP authentication.
+  📍 *UI Navigation:* **Project → Project Settings → SMTP Settings → Password**
+
+- **`isSecure`**
+  If set to `true`, Mindbricks will use a secure (SSL/TLS) connection to the SMTP server.
+  📍 *UI Navigation:* **Project → Project Settings → SMTP Settings → Use Secure Connection (TLS/SSL)**
+
+### 📡 Amazon SNS Settings
+
+Amazon Simple Notification Service (SNS) allows your application to send push notifications, SMS messages, and other event-driven alerts through AWS infrastructure. While Mindbricks does **not provide a managed SNS setup**, you can configure your own Amazon SNS integration by supplying the necessary credentials here.
+
+```javascript
+projectSettings.amazonSNSSettings = {
+  useAmazonSNS: true,
+  accessKey: "YOUR_ACCESS_KEY_ID",
+  secretKey: "YOUR_SECRET_ACCESS_KEY",
+  region: "us-east-1"
+};
+```
+
+#### Configuration Fields
+
+- **`useAmazonSNS`**
+  Set this to `true` to enable Amazon SNS messaging integration for your project.
+  📍 *UI Navigation:* **Project → Project Settings → Amazon SNS Settings → Enable Amazon SNS**
+
+- **`accessKey`**
+  Your AWS access key ID. This grants permission for Mindbricks to interact with SNS on your behalf.
+  📍 *UI Navigation:* **Project → Project Settings → Amazon SNS Settings → Access Key**
+
+- **`secretKey`**
+  The secret access key that pairs with your access key ID. This should be kept secure.
+  📍 *UI Navigation:* **Project → Project Settings → Amazon SNS Settings → Secret Key**
+
+- **`region`**
+  The AWS region in which your SNS topics and services are hosted (e.g., `us-west-2`, `eu-central-1`).
+  📍 *UI Navigation:* **Project → Project Settings → Amazon SNS Settings → AWS Region**
+
+### 🔥 Firebase Settings
+
+Firebase provides a range of backend services such as messaging, authentication, and real-time databases. While Mindbricks does **not include Firebase by default**, you can configure integration here if your application requires Firebase features like push notifications or real-time data sync.
+
+```javascript
+projectSettings.firebaseSettings = {
+  useFirebase: true,
+  firebaseKey: "YOUR_FIREBASE_API_KEY"
+};
+```
+
+#### Configuration Fields
+
+- **`useFirebase`**
+  Set this to `true` to enable Firebase integration for your project.
+  📍 *UI Navigation:* **Project → Project Settings → Firebase Settings → Enable Firebase**
+
+- **`firebaseKey`**
+  The API key for accessing Firebase services in your project. This is typically found in your Firebase project's settings.
+  📍 *UI Navigation:* **Project → Project Settings → Firebase Settings → Firebase API Key**
+
+### 📧 SendGrid Settings
+
+SendGrid is a powerful cloud-based email service used for sending transactional and notification emails. Mindbricks does not manage SendGrid for you—you must configure it with your own account and API key.
+
+```javascript
+projectSettings.sendGridSettings = {
+  useSendGrid: true,
+  sendGridApiKey: "YOUR_SENDGRID_API_KEY",
+  sendGridFromEmail: "noreply@yourdomain.com"
+};
+```
+
+#### Configuration Fields
+
+- **`useSendGrid`**
+  Set to `true` to enable SendGrid integration for sending emails.
+  📍 *UI Navigation:* **Project → Project Settings → SendGrid Settings → Enable SendGrid**
+
+- **`sendGridApiKey`**
+  Your SendGrid API key used to authenticate requests. This key must be kept secret.
+  📍 *UI Navigation:* **Project → Project Settings → SendGrid Settings → API Key**
+
+- **`sendGridFromEmail`**
+  The default sender email address for all outgoing messages sent via SendGrid.
+  📍 *UI Navigation:* **Project → Project Settings → SendGrid Settings → Sender Email**
+
+### 📲 Twilio Settings
+
+Twilio is a cloud communications platform used to send SMS messages, voice calls, and other communication services. Mindbricks does not manage Twilio accounts, so if you choose to integrate Twilio, you must provide your own credentials here.
+
+```javascript
+projectSettings.twilioSettings = {
+  useTwilio: true,
+  twilioAccountSid: "ACXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+  twilioAuthToken: "your_auth_token",
+  twilioSender: "+1234567890"
+};
+```
+
+#### Configuration Fields
+
+- **`useTwilio`**
+  Set this to `true` to enable Twilio integration for SMS or voice operations.
+  📍 *UI Navigation:* **Project → Project Settings → Twilio Settings → Enable Twilio**
+
+- **`twilioAccountSid`**
+  Your unique Twilio Account SID. This identifies your Twilio account.
+  📍 *UI Navigation:* **Project → Project Settings → Twilio Settings → Account SID**
+
+- **`twilioAuthToken`**
+  Your Twilio Auth Token. This is used to authenticate API requests. Keep it secure.
+  📍 *UI Navigation:* **Project → Project Settings → Twilio Settings → Auth Token**
+
+- **`twilioSender`**
+  The default sender ID for outgoing messages (e.g., a Twilio phone number or alphanumeric sender ID).
+  📍 *UI Navigation:* **Project → Project Settings → Twilio Settings → Sender**
+
+### 📡 Vonage Settings
+
+Vonage (formerly Nexmo) is a communications platform that enables SMS messaging and voice services. Mindbricks allows integration with Vonage by providing your own credentials. This is optional and used only if you prefer Vonage as your SMS provider.
+
+```javascript
+projectSettings.vonageSettings = {
+  useVonage: true,
+  vonageToken: "your_vonage_token",
+  vonageSender: "MyApp"
+};
+```
+
+#### Configuration Fields
+
+- **`useVonage`**
+  Set to `true` to enable Vonage for sending SMS messages.
+  📍 *UI Navigation:* **Project → Project Settings → Vonage Settings → Enable Vonage**
+
+- **`vonageToken`**
+  The token used for authenticating with the Vonage API.
+  📍 *UI Navigation:* **Project → Project Settings → Vonage Settings → API Token**
+
+- **`vonageSender`**
+  The default sender name or phone number that will appear on outgoing SMS messages.
+  📍 *UI Navigation:* **Project → Project Settings → Vonage Settings → Sender ID**
+
+### 🇹🇷 NetGSM Settings
+
+NetGSM is a Turkish SMS provider commonly used for transactional and notification messages within Turkey. Mindbricks allows you to integrate NetGSM by configuring your own account credentials. This is an optional integration, and it’s only needed if you prefer NetGSM over other messaging providers.
+
+```javascript
+projectSettings.netGsmSettings = {
+  useNetGSM: true,
+  netGsmUsername: "netgsm_user",
+  netGsmPassword: "secure_password",
+  netGsmSender: "MYAPP"
+};
+```
+
+#### Configuration Fields
+
+- **`useNetGSM`**
+  Enable this to use NetGSM for SMS messaging.
+  📍 *UI Navigation:* **Project → Project Settings → NetGSM Settings → Enable NetGSM**
+
+- **`netGsmUsername`**
+  The username provided by NetGSM for API access.
+  📍 *UI Navigation:* **Project → Project Settings → NetGSM Settings → Username**
+
+- **`netGsmPassword`**
+  The password or API key used for authentication with NetGSM.
+  📍 *UI Navigation:* **Project → Project Settings → NetGSM Settings → Password**
+
+- **`netGsmSender`**
+  The sender ID that will appear on outgoing messages. This should be approved by NetGSM for use.
+  📍 *UI Navigation:* **Project → Project Settings → NetGSM Settings → Sender Label**
+
+### 🔔 OneSignal Settings
+
+OneSignal is a popular push notification service that supports mobile, web, and desktop messaging. Mindbricks supports OneSignal integration for delivering real-time notifications to your users, but does not provide a managed OneSignal account. To activate this integration, you must supply your own credentials.
+
+```javascript
+projectSettings.oneSignalSettings = {
+  useOneSignal: true,
+  oneSignalAppId: "your-onesignal-app-id",
+  oneSignalApiKey: "your-onesignal-api-key"
+};
+```
+
+#### Configuration Fields
+
+- **`useOneSignal`**
+  Enables OneSignal push notification support for your Mindbricks project.
+  📍 *UI Navigation:* **Project → Project Settings → OneSignal Settings → Enable OneSignal**
+
+- **`oneSignalAppId`**
+  The App ID of your OneSignal project. You can find this in your OneSignal dashboard.
+  📍 *UI Navigation:* **Project → Project Settings → OneSignal Settings → Application ID**
+
+- **`oneSignalApiKey`**
+  The REST API key used to send notifications through OneSignal’s backend. This is required for server-to-server communication.
+  📍 *UI Navigation:* **Project → Project Settings → OneSignal Settings → API Key**
+
+### 💳 Stripe Payment Integration
+
+Mindbricks supports Stripe as a payment provider for handling secure, scalable payment operations within your backend. While Mindbricks manages the infrastructure and APIs for payment workflows, you must provide your own Stripe credentials to enable this integration.
+
+```javascript
+projectSettings.stripeSettings = {
+  useStripe: true,
+  testPublicKey: "pk_test_xxxxx",
+  testSecretKey: "sk_test_xxxxx",
+  livePublicKey: "pk_live_xxxxx",
+  liveSecretKey: "sk_live_xxxxx"
+};
+```
+
+#### Configuration Fields
+
+- **`useStripe`**
+  Enables Stripe integration for your application.
+  📍 *UI Navigation:* **Project → Project Settings → Stripe Settings → Enable Stripe**
+
+- **`testPublicKey`**
+  Your Stripe *publishable* key for test environments (used in development and staging).
+
+- **`testSecretKey`**
+  Your Stripe *secret* key for test environments.
+
+- **`livePublicKey`**
+  Your Stripe *publishable* key for live (production) usage.
+
+- **`liveSecretKey`**
+  Your Stripe *secret* key for production.
+
+#### 📘 Related Documentation
+
+For a complete explanation of how payment workflows are modeled, executed, and secured in Mindbricks—including order-to-payment mapping, webhook handling, and Stripe object bindings—refer to the guide:
+
+**📄&#x20;**[**Payment Operations in Mindbricks Using Stripe**](#)
+(This document details how to integrate Stripe with Mindbricks DataObjects and how generated services handle payment lifecycle operations automatically.)
+
+### 🤖 AI Service Integration
+
+The `AiSettings` section allows you to configure credentials for connecting your application to external AI service providers. These keys are required for any features in your system that rely on natural language processing, AI-based inference, classification, or intelligent decision-making.
+
+```javascript
+projectSettings.aiSettings = {
+  openAiApiKey: "sk-xxxxxxxxxxxxxxx",
+  anthropicApiKey: "claude-xxxxxxxxxxxxxxx"
+};
+```
+
+#### Configuration Fields
+
+- **`openAiApiKey`**
+  Your API key for [OpenAI](https://openai.com/). Required if your system includes features powered by GPT-4, GPT-3.5, or any other OpenAI model.
+  📍 *UI Navigation:* **Project → Project Settings → AI Settings → OpenAI API Key**
+
+- **`anthropicApiKey`**
+  Your API key for [Anthropic](https://www.anthropic.com/) services, such as Claude models. Add this only if your application is designed to leverage Anthropic endpoints.
+  📍 *UI Navigation:* **Project → Project Settings → AI Settings → Anthropic API Key**
+
+### 🔔 Notification Configuration
+
+The `notificationSettings` section defines the project's global strategy for sending notifications across **SMS**, **email**, and **push** channels. It also determines whether notifications should be stored, and how event-driven messages (via Kafka) trigger notification delivery.
+
+```javascript
+projectSettings.notificationSettings = {
+  storedNotice: true,
+  smsProvider: "twilio",
+  emailProvider: "smtp",
+  pushProvider: "firebase",
+  eventNotifications: [ /* defined separately */ ]
+}
+```
+
+---
+
+### ⚙️ Configuration Fields
+
+- **`storedNotice`**
+  Enables or disables notification persistence.
+
+  - `true`: Notifications are saved to the database and can be listed in the UI or retrieved via APIs.
+
+  - `false`: Notifications are sent transiently without persistence.
+    📍 *UI Navigation:* **Project → Project Settings → Notification Settings → Store Notices**
+
+- **`smsProvider`**
+  Select the service provider for SMS notifications.
+  Options include: `twilio`, `netgsm`, `vonage`, `amazonsns`, and `fake`.
+  📍 *UI Navigation:* **Notification Settings → SMS Provider**
+
+- **`emailProvider`**
+  Select the email provider for system messages and alerts.
+  Options: `smtp`, `sendgrid`, `amazonsns`, `fake`.
+  📍 *UI Navigation:* **Notification Settings → Email Provider**
+
+- **`pushProvider`**
+  Choose the provider for push notifications.
+  Options: `firebase`, `onesignal`, `amazonsns`, `fake`.
+  📍 *UI Navigation:* **Notification Settings → Push Provider**
+
+---
+
+### ⚡ Event-Driven Notifications
+
+The `eventNotifications` array configures how your application reacts to messages published on Kafka topics. You can define notification templates, dynamic content, and target channels for each event type.
+
+This mechanism is essential for building reactive systems—triggering alerts on actions like "order created", "password changed", or "payment failed".
+
+## What’s Next: Continue Your Architecture
+
+Now that you’ve explored how to configure your Mindbricks project, it’s time to dive deeper into specific areas of your architecture. Each of the following documents focuses on a key dimension of your backend system, helping you make the most of the Mindbricks Pattern Ontology.
+
+- [**Understanding Authentication and Authorization in Mindbricks**](#)
+  Learn how to define secure login, role-based access, permissions, and identity strategies using Mindbricks’ flexible authentication model.
+
+- [**Building a Service in Mindbricks**](#)
+  Understand how to define a self-contained microservice using patterns for data, routes, logic, and communication.
+
+- [**Building Your DataModel**](#)
+  Discover how to structure your service's data layer using DataObjects and configure ownership, indexing, and relationships.
+
+- [**Building Your API in Mindbricks**](#)
+  Learn to configure Create, Read, Update, Delete (CRUD) routes, define validations, add custom hooks, and control access at a granular level.
+
+- [**Managing Notifications in Mindbricks**](#)
+  Explore how to handle system-wide notifications using Kafka events, channels (email, SMS, push), and reusable templates.
+
+- [**Payment Operations in Mindbricks Using Stripe**](#)
+  See how to integrate Stripe into your services, map data objects to payment flows, and handle secure transaction logic.
+
+- [**Integrating AI into Your Services**](#)
+  Use AI fetches, validations, and agents in your routes or services, and configure model integrations (OpenAI, Anthropic).
+
+- [**Writing Your Own Code in Mindbricks**](#)
+  Extend your application with custom library functions, edge controllers, and hooks—while preserving generation consistency.
+
+- [**Integrating Your Application with External APIs**](#)
+  Learn how to configure interservice and third-party API calls using FetchOptions and connection patterns.
+

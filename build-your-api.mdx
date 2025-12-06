@@ -1,0 +1,1963 @@
+---
+title: Building Your API in Mindbricks
+---
+## **Overview**
+
+Mindbricks operates around two fundamental architectural concepts — **Data Objects** and **Business APIs**.
+At first glance, it might seem that Data Objects are only about data structure while Business APIs are only about endpoints.
+While that’s partly true, it’s far from the whole picture.
+
+A **Data Object** in Mindbricks begins as a simple schema definition, but through its `dbObject` and `dbProperty` configurations, it evolves into a **rich, logic-driven construct**.
+Each property or object-level attribute can influence how Mindbricks automatically builds business logic around that data.
+For example:
+
+- When a property is marked as a **session-populated property**, its management within `create` or `update` API flows is **automatically handled** by Mindbricks.
+
+- When a property is defined as a **static join**, the `create` and `update` APIs will **automatically populate** it using its defined relationship to another Data Object.
+
+Beyond individual properties, **object-level settings** can also embed logic.
+For example, marking a Data Object with **membership logic** or **payment logic** enriches all APIs that interact with it.
+
+---
+
+### **From Data Objects to Business APIs**
+
+A **Business API** in Mindbricks is not merely an endpoint definition — it’s an **architectural workflow design** triggered by an endpoint.
+This workflow consists of **predefined milestones** that represent the lifecycle of an operation (e.g., validation, data fetch, authorization, transformation, persistence).
+While many workflows are automatically generated for standard CRUD operations, they can be extended, modified, or completely redesigned through configuration and pattern composition.
+
+Each Business API has its **own behavior** shaped by:
+
+- **Data object enrichments** (e.g., property annotations, ownership logic)
+
+- **API-level configurations** (e.g., where clauses, select clauses, custom parameters)
+
+- **Workflow customization** through Business API Actions
+
+Even without *any additional configuration*, a Data Object definition is **enough to generate a complete set of APIs** —
+`get`, `getList`, `create`, `update`, and `delete` — ready for use.
+
+However, Mindbricks extends far beyond simple data management.
+It is a **logic machine**, offering a wide array of architectural and behavioral control mechanisms for building complex business processes.
+
+---
+
+### **Workflow Design and Business Logic Customization**
+
+Mindbricks provides fine-grained control over API behavior through its **workflow design layer**.
+Each Business API has a structured execution pipeline consisting of **milestones** such as:
+
+- `afterStartBusinessApi` — where you can attach an early `PermissionCheckAction` or `ReadJwtTokenAction` to validate access before processing begins.
+
+- `afterBuildWhereClause` — suitable for adding `MembershipCheckAction` or `ObjectPermissionCheckAction` to ensure data-level security.
+
+- `afterFetchInstance` — where you can enrich context using a `FetchParentAction` or `CollateListsAction`.
+
+- `afterMainUpdateOperation` — ideal for adding a `PublishEventAction` or `InterserviceCallAction` after the main transaction.
+
+- `afterBuildOutput` — commonly used to shape the response through `AddToResponseAction` or `RemoveFromResponseAction`.
+
+These milestones act as controlled extension points, letting you weave additional logic into the lifecycle without altering the underlying CRUD structure.
+
+Each Business API contains an **`actions`** store, where logic operations are defined and then attached to milestones.
+For example, you can insert:
+
+- **Validation or permission logic** using `ValidationAction`, `PermissionCheckAction`, or `MembershipCheckAction`
+
+- **Data fetching and enrichment** via `FetchObjectAction`, `FetchStatsAction`, or `ReadFromRedisAction`
+
+- **Custom transformations** using `FunctionCallAction` or `AddToContextAction`
+
+- **Inter-service and integration logic** with `InterserviceCallAction` or `IntegrationAction`
+
+- **Event and communication steps** through `PublishEventAction`, `SendMailAction`, or `SendPushNotificationAction`
+
+- **AI or automation utilities** such as `AiCallAction`, `RefineByAiAction`, or `DataToFileAction`
+
+Together, these patterns form a **modular, declarative logic framework** where each milestone and action has a clear purpose and position within the flow — allowing APIs in Mindbricks to express highly customized business behavior while staying fully pattern-aligned.
+
+---
+
+### **Extending Beyond Patterns**
+
+While Mindbricks offers hundreds of predefined BusinessApiActions for declarative logic composition, it also empowers developers to go **beyond patterns**.
+You can write **custom javascript functions**, inline logic blocks, or even full JavaScript extensions to handle edge cases and unique business scenarios that patterns cannot yet express.
+These custom code fragments integrate directly into the same workflow system, coexisting with pattern-defined actions and following the same lifecycle semantics.
+
+### **Bringing It All Together**
+
+In this document, we will learn how to build **rich, pattern-based APIs** that can express virtually unlimited types of business logic.
+We begin by understanding the **`BusinessApi`** pattern — the central element of Mindbricks’ logic architecture.
+
+---
+
+## **BusinessApi Pattern Definition**
+
+Even though each Business API is associated with a **main Data Object**, Business APIs are defined at the **service level**, inside the `businessLogic` property of the `Service` pattern.
+
+```json
+"Service": {
+  // ...
+  "businessLogic": ["BusinessApi"],
+  // ...
+}
+```
+
+Each entry in this array is a `BusinessApi` definition.
+Below is the structure of the **BusinessApi pattern**, which encapsulates all configurable aspects of an API — from authentication to workflow design.
+
+---
+
+### **BusinessApi Pattern**
+
+```json
+"BusinessApi": {
+  "__apiOptions.doc": "Defines the name, type, dataObject, and description of the business API, as well as its basic options.",
+  "__authOptions.doc": "Defines core authentication and authorization settings for a Business API. These settings cover session validation, role and ownership checks, and access scope (e.g., tenant vs. SaaS-level). While these options are sufficient for most use cases, more fine-grained access control—such as conditional permissions or contextual ownership—should be implemented using explicit access control actions (e.g., `PermissionCheckAction`, `MembershipCheckAction`, `ObjectPermissionCheckAction`).",
+  "__customParameters.doc": "An array of manually defined parameters extracted from the incoming request (body, query, or session). Configured using `BusinessApiParameter` and written to the context as `this.<name>` before workflow execution.",
+  "__redisParameters.doc": "An array of parameters fetched from Redis based on dynamically computed keys. Defined using `RedisApiParameter` and written to the context as `this.<name>`, just like custom parameters.",
+  "__restSettings.doc": "Defines HTTP REST controller settings such as method and route path. Automatically generated using naming conventions but can be customized for fine-grained REST control.",
+  "__grpcSettings.doc": "Enables gRPC access for this Business API and configures request/response schemas. Disabled by default unless explicitly configured.",
+  "__kafkaSettings.doc": "Enables this API to be triggered by Kafka events. The controller listens for messages published to configured Kafka topics, enabling event-driven orchestration across services.",
+  "__socketSettings.doc": "Enables invocation of this API over WebSocket channels, allowing real-time bidirectional communication.",
+  "__cronSettings.doc": "Schedules this API for automatic execution at specified intervals using cron expressions. Commonly used for background jobs or periodic tasks.",
+  "__selectClause.doc": "Specifies which fields to select from the main data object during `get` or `list` operations. Leave blank to select all.",
+  "__whereClause.doc": "Defines criteria to locate target record(s) for `get`, `list`, `update`, or `delete` operations. Expressed as a query object.",
+  "__dataClause.doc": "Defines custom field-value assignments used to modify or augment payloads in `create` and `update` operations. Overrides defaults derived from session or parameters.",
+  "__deleteOptions.doc": "Settings specific to `delete` type APIs, such as soft-delete or cascade behaviors.",
+  "__getOptions.doc": "Settings for `get` APIs, including enrichment, fallback, or caching behavior.",
+  "__listOptions.doc": "Defines list-specific options such as filtering, default sorting, and result customization.",
+  "__paginationOptions.doc": "Configures pagination for `list` APIs, including page size, offset, cursor mode, and total count.",
+  "__actions.doc": "Represents logic actions that can be referenced in the API’s workflow. These include fetches, validations, permissions, transformations, and output shaping.",
+  "__workflow.doc": "Defines the logical flow of the Business API — a sequence of action names grouped by lifecycle stages. Can be visualized in the architecture UI or generated programmatically.",
+
+  "apiOptions": "ApiOptions",
+  "authOptions": "ApiAuthOptions",
+
+  "customParameters": ["BusinessApiParameter"],
+  "redisParameters": ["RedisApiParameter"],
+
+  "restSettings": "ApiRestSettings",
+  "grpcSettings": "ApiGrpcSettings",
+  "kafkaSettings": "ApiKafkaSettings",
+  "socketSettings": "ApiSocketSettings",
+  "cronSettings": "ApiCronSettings",
+
+  "selectClause": "SelectClauseSettings",
+  "dataClause": "DataClauseSettings",
+  "whereClause": "WhereClauseSettings",
+  "deleteOptions": "DeleteOptions",
+  "getOptions": "GetOptions",
+  "listOptions": "ListOptions",
+  "paginationOptions": "PaginationOptions",
+  "actions": "BusinessApiActionStore",
+  "workflow": "BusinessWorkflow"
+}
+```
+
+---
+
+### **API-Type Specific Settings**
+
+The **`BusinessApi`** pattern serves as a **universal container** for all API types — `get`, `list`, `create`, `update`, and `delete`.
+While most of its settings are shared across all API types, certain configuration sections apply **only to specific kinds of Business APIs**, depending on their functional purpose.
+
+The following mappings clarify which settings are **type-specific**:
+
+- `selectClause` — applies only to **get** and **list** APIs.
+
+- `dataClause` — used in **create** and **update** APIs.
+
+- `whereClause` — relevant for **get**, **list**, **update**, and **delete** (not used in create).
+
+- `deleteOptions` — applies only to **delete** APIs.
+
+- `listOptions` — applies only to **list** APIs.
+
+- `paginationOptions` — applies only to **list** APIs.
+
+All other settings — including `authOptions`, `restSettings`, `actions`, and `workflow` — are **common across all Business APIs**, providing a unified architecture that keeps behavior consistent regardless of operation type.
+
+---
+
+## **Understanding Basic Options of a Business API**
+
+A **Business API** in Mindbricks is defined by a small but crucial set of foundational options that determine its identity, behavior, and target data model.
+These are defined under the `ApiOptions` pattern and include attributes like `name`, `description`, `crudType`, and `dataObjectName`, each of which influences both code generation and runtime behavior.
+
+```json
+"ApiOptions": {
+  "__dataObjectName.doc": "Specifies the primary data object that this Business API interacts with. This object is the core target of the API's operation, such as reading, updating, or deleting records.",
+
+  "__crudType.doc": "Defines the primary operation type for this API. Possible values are `get`, `list`, `create`, `update`, and `delete`. This classification drives the behavior and flow of the API lifecycle.",
+
+  "__name.doc": "A unique, human-readable name for the API, used for referencing in documentation and the UI. This is not a code-level identifier; instead, generated class and function names are derived from this value. Use camelCase formatting, avoid spaces or special characters, and ensure uniqueness within the same service. If you want the API to behave like a default RESTful endpoint, use a verb-noun combination like `createUser`, `getOrder`, or `deleteItem`, which will enforce expected parameters and URL patterns (e.g., `/users/:userId`).",
+
+  "__apiDescription.doc": "A brief explanation of the API's business purpose or logic. Helps clarify its intent for developers and documentation readers.",
+
+  "__raiseApiEvent.doc": "Indicates whether the Business API should emit an API-level event after successful execution. This is typically used for audit trails, analytics, or external integrations.",
+
+  "__raiseDbLevelEvents.doc": "If true, database-level events will be emitted for each affected data object. This is useful for APIs that interact with multiple related objects and need fine-grained event tracking.",
+
+  "__autoParams.doc": "Determines whether input parameters should be auto-generated from the schema of the associated data object. Set to `false` if you want to define all input parameters manually.",
+
+  "__readFromEntityCache.doc": "If enabled, the API will attempt to read the target object from the Redis entity cache before querying the database. This can improve performance for frequently accessed records.",
+
+  "__raiseDbLevelEvents.default": true,
+  "__raiseApiEvent.default": true,
+  "__autoParams.default": true,
+  "__readFromEntityCache.default": false,
+
+  "dataObjectName": "DataObjectName",
+  "crudType": "CrudTypes",
+  "name": "String",
+  "apiDescription": "Text",
+  "raiseApiEvent": "Boolean",
+  "raiseDbLevelEvents": "Boolean",
+  "autoParams": "Boolean",
+  "readFromEntityCache": "Boolean"
+}
+```
+
+---
+
+### **The&#x20;****`dataObjectName`****&#x20;and&#x20;****`crudType`****&#x20;Attributes**
+
+These two attributes define the *core identity* of a Business API.
+
+- **`dataObjectName`** specifies which **Data Object** the API operates on — the central entity being read, created, or modified.
+  Its type is **`DataObjectName`**, a special string reference used across Mindbricks.
+  A Data Object name can be written directly (e.g., `category`) or with its service prefix (e.g., `product:category`).
+  When the service name is omitted, Mindbricks first looks for the Data Object in the **current service**; if it’s not found there, it automatically checks the **referenced service location** in the project.
+
+- **`crudType`** defines the **type of operation**, determining which workflow milestones and clauses are activated — such as `create`, `update`, `delete`, `get`, or `list`.
+
+Together, these two options tell Mindbricks **what the API does** and **where it applies**, serving as the foundation for route generation, workflow selection, and automated logic scaffolding.
+
+---
+
+### **Understanding the&#x20;****`name`****&#x20;Attribute**
+
+The `name` of a Business API is far more than a label — it acts as a **semantic anchor** that drives automatic generation of REST routes, event names, and internal code identifiers.
+Mindbricks interprets this name intelligently to ensure both readability and consistency across documentation, code, and runtime routing.
+
+1. **Naming convention:**
+   Use `camelCase` format — lowercase start, capital letters for subsequent words.
+   Example: `deleteUserReport`
+
+2. **Verb-first structure:**
+   Begin the name with an English verb that defines the action.
+   Examples: `registerUser`, `addOrderItem`
+   Mindbricks understands common verbs and their tense forms to generate consistent naming in code and routes.
+
+3. **Preferred standard verbs:**
+   Use standard CRUD verbs (`get`, `list`, `create`, `update`, `delete`) whenever applicable, as these trigger **automatic RESTful route generation**.
+   Use custom verbs only when necessary — e.g., `approveRequest` instead of `updateRequest` for clarity of intent.
+
+4. **Resource naming:**
+   The words following the verb are interpreted as the **resource name** — usually the Data Object name.
+   Examples:
+
+   - `createProduct` → resource: *product*
+
+   - `deleteCustomer` → resource: *customer*
+
+   - `listActiveProducts` → resource: *activeProducts*
+
+   For `list` operations, use the plural form — e.g., `listInvoices`.
+
+---
+
+### **Generated Results from Naming**
+
+#### **a. Route Path Generation**
+
+When standard verbs are used, Mindbricks automatically generates RESTful routes following pluralized resource conventions:
+
+| API Name        | Method | Route Path             |
+| --------------- | ------ | ---------------------- |
+| `createProfile` | POST   | `/profiles`            |
+| `getProfile`    | GET    | `/profiles/:profileId` |
+| `listProfiles`  | GET    | `/profiles`            |
+| `deleteProfile` | DELETE | `/profiles/:profileId` |
+| `updateProfile` | PATCH  | `/profiles/:profileId` |
+
+If a **non-standard verb** is used, the verb itself appears in the route:
+
+| API Name        | Method | Route Path                  |
+| --------------- | ------ | --------------------------- |
+| `registerUser`  | POST   | `/registeruser`             |
+| `rejectRequest` | PATCH  | `/rejectrequest/:requestId` |
+| `removeMember`  | DELETE | `/removemember`             |
+
+You can mix standard and custom verbs:
+
+- `updateRequest` → `/requests/:requestId`
+
+- `approveRequest` → `/approverequest/:requestId`
+
+---
+
+#### **b. API Event Names**
+
+Mindbricks automatically derives event names from the **resource name** and the **passive form** of the verb:
+
+| API Name        | Event Name        |
+| --------------- | ----------------- |
+| `createProfile` | `profile-created` |
+| `deleteUser`    | `user-deleted`    |
+| `doJob`         | `job-done`        |
+
+These events are published automatically when `raiseApiEvent` is enabled.
+
+---
+
+#### **c. Constant Names in Code**
+
+The same API name also influences generated code constants, manager class names, and identifiers.
+For example, for an API named `rateStore`, Mindbricks generates:
+
+```javascript
+class RateStoreManager {
+  // internal API workflow and actions
+}
+```
+
+This pattern ensures semantic clarity across documentation, code, and generated microservice routes — all consistently derived from a single, meaningful API name.
+
+---
+
+#### **API Description**
+
+The description of a Business API should be clearly written in the **`apiDescription`** attribute.
+Do not skip this field — it plays an important role in multiple layers of the Mindbricks ecosystem.
+
+1. **Documentation:**
+   The API documentation directly uses this description to make the API’s business purpose clear for both human and AI readers.
+
+2. **External Tools:**
+   Swagger, OpenAPI, Postman, and API-Face documentation all include this description to inform testers and integrators about the API’s intent and behavior.
+
+3. **MCP Server Exposure:**
+   When the MCP server exposes this Business API as an MCP tool, the same description is published to the client.
+   It must therefore be written clearly and richly enough for MCP clients to understand what the API does and when it should be used.
+
+4. **Code Context:**
+   The generated service code also embeds this description as a code-level comment, helping developers and reviewers quickly understand the API’s purpose when reading the source files.
+
+In short, `apiDescription` is not just for documentation — it’s part of the API’s semantic identity across interfaces, code, and AI-driven integrations.
+
+#### **Entity Cache in API Management**
+
+Mindbricks can automatically build **entity caches** in Redis for any Data Object.
+Entity cache management is explained in detail in the **Data Object** documentation, but at the API level, it can be selectively enabled or disabled per Business API.
+
+When the option **`readFromEntityCache`** is set to `true`, the API will first attempt to retrieve the target object from the Redis cache.
+If the cached entity exists, Mindbricks will serve it directly from memory without querying the database, significantly improving response time for frequently accessed records.
+If the cache does not contain the entity, the system automatically falls back to the database and refreshes the cache afterward.
+
+---
+
+#### **Raising Events**
+
+Each Business API in Mindbricks can emit **Kafka events** to notify other services or clients about actions and state changes occurring within the system.
+
+At the end of its workflow, every API reaches a **publishing milestone** where it can emit an event message that includes contextual information and the final output of execution.
+This feature is controlled by the **`raiseApiEvent`** option.
+When `raiseApiEvent` is set to `true`, the API automatically publishes an event after successful completion.
+For `create`, `update`, and `delete` APIs, this option is **enabled by default**; for `get` and `list` APIs, it is **disabled by default** unless explicitly activated.
+
+---
+
+##### **Event Naming Convention**
+
+The **Kafka topic name** for an API event follows this format:
+
+```
+{projectCodeName}-{serviceName}-service-{resourceName}-{apiActionInPassiveForm}
+```
+
+Example:
+
+```
+rentworld-catalog-service-vehicle-created
+```
+
+---
+
+##### **Verb Rules for Event Names**
+
+When `get` or `list` APIs are configured to raise events, Mindbricks applies specific wording rules for clarity and linguistic consistency:
+
+- A **`get`** API publishes events using the verb **“retrieved”** instead of “got.”
+  Example:
+  `getCustomer` → `rentworld-customer-service-customer-retrieved`
+
+- A **`list`** API publishes events using the verb **“listed.”**
+  Example:
+  `listCustomers` → `rentworld-customer-service-customers-listed`
+
+These rules apply **only when the action name is exactly&#x20;****`get`****&#x20;or&#x20;****`list`**.
+For APIs with other verbs, Mindbricks simply converts the verb into its **passive form**, preserving its semantic meaning.
+Examples:
+
+- `showCustomers` → `rentworld-customer-service-customers-shown`
+
+- `findCustomer` → `rentworld-customer-service-customer-found`
+
+---
+
+##### **Database-Level Events**
+
+In addition to API-level events, Mindbricks can emit **database-level events** whenever a Data Object operation occurs during workflow execution.
+For instance, a `deleteCustomer` API may produce a single API event (`customer-deleted`) but multiple **DB-level events** reflecting related operations:
+
+```
+rentworld-service-dbevent-customer-deleted
+rentworld-service-dbevent-profile-deleted
+rentworld-service-dbevent-account-updated
+rentworld-service-dbevent-customeraudit-created
+```
+
+Each DB event publishes the **final state of the affected Data Object**, ensuring precise synchronization across services, listeners, and analytics pipelines.
+This behavior is governed by the **`raiseDbLevelEvents`** option, which is **enabled by default** for `create`, `update`, and `delete` APIs.
+
+---
+
+---
+
+## **Understanding Parameters**
+
+An API is configured with parameters that define its **behavior** and **interaction** with clients.
+In Mindbricks, Business API parameter management is designed to be **intelligent and adaptive**.
+In most cases, the required parameters are generated **automatically** by Mindbricks based on the associated **Data Object** and **CRUD type**.
+
+In `apiOptions`, the attribute **`autoParams`** (which is `true` by default) controls this automatic parameter generation.
+When enabled, Mindbricks defines all necessary input parameters automatically — and for `create` and `update` APIs, it also automatically builds the **`dataClause`** section based on the Data Object structure.
+
+Before exploring how parameters are generated or customized, let’s first understand **what a Business API Parameter is.**
+
+---
+
+### **Business API Parameter Definition**
+
+A **Business API Parameter** (of type `BusinessApiParameter`) defines a customizable input for a Business API.
+Parameters are extracted from the incoming request, validated, and transformed before being written into the **API context** as `this.<name>`.
+They can originate from any request source — REST (`body`, `query`, or `session`), **Kafka payload**, **gRPC input**, or other controller types.
+
+```json
+"BusinessApiParameter": {
+  "name": "String",
+  "type": "DataTypes",
+  "required": "Boolean",
+  "defaultValue": "AnyComplex",
+  "httpLocation": "RequestLocations",
+  "dataPath": "String",
+  "transform": "MScript",
+  "hidden": "Boolean",
+  "description": "Text"
+}
+```
+
+---
+
+### **Explanation of Fields**
+
+- **`name`**
+  The parameter name inside the API context.
+  Its value becomes available as `this.<name>` during Business API execution.
+  It does not need to match the incoming request key.
+
+- **`type`**
+  The expected data type of the parameter, selected from the standard `DataTypes` enum (e.g., `String`, `Number`, `Boolean`).
+  Used for type validation and casting.
+
+- **`required`**
+  Indicates whether the parameter must be present in the incoming request.
+  If `true` and the parameter is missing, the API will throw a validation error.
+  For auto-generated parameters, this value is derived from the Data Property’s `isRequired` attribute.
+
+- **`defaultValue`**
+  Defines a fallback value when the parameter is not provided.
+  This makes a parameter optional without causing validation errors.
+
+- **`httpLocation`**
+  Specifies where the parameter is read from in REST APIs (`body`, `query`, or `session`).
+  For other controller types (Kafka, gRPC, Socket), the parameter is always considered part of the request body or payload.
+
+- **`hidden`**
+  When `true`, hides the parameter from API-facing tools such as API-Face, Swagger, or MCP.
+  Hidden parameters are still functional — they’re read from the controller and written to the context — but are intentionally excluded from public documentation to avoid confusing human or AI readers.
+
+- **`dataPath`**
+  A dot-path expression used to locate the parameter value in its source object (e.g., `user.email`, `input.cart.total`).
+
+- **`transform`**
+  An optional **MScript** expression used to post-process or normalize the raw input before validation.
+  Useful for trimming strings, coercing types, or applying computed defaults.
+  For example:
+
+  ```javascript
+  this.avatar ?? `https://gravatar.com/avatar/${LIB.common.md5(this.email ?? 'nullValue')}?s=200&d=identicon`
+  ```
+
+- **`description`**
+  A human-readable explanation of the parameter’s purpose.
+  For auto-generated parameters, Mindbricks inherits this from the linked Data Property’s documentation.
+  For manually defined parameters, you should always provide a clear and descriptive explanation — it is essential for both human and AI consumers of the API.
+
+---
+
+Here’s your refined version of the new section — keeping every detail intact, but with professional language, smoother flow, and consistent formatting aligned with the rest of your documentation:
+
+---
+
+## **Automatic Parameter Generation with&#x20;****`autoParams`**
+
+When **`autoParams`** is set to `true`, Mindbricks automatically builds the parameter set of a Business API based on the **Data Object** definition and the **CRUD type**.
+This eliminates the need for manual parameter configuration in most cases, allowing the API to adapt dynamically to changes in its underlying data structure.
+
+---
+
+## **Create and Update Type APIs**
+
+When **`autoParams`** is enabled, Mindbricks automatically generates parameters for both **create** and **update** type Business APIs.
+These two API types share similar logic since both involve writing data to the database, but they differ in how parameters are treated, which properties are exposed, and when certain values are recalculated.
+
+---
+
+### **Create-Type APIs**
+
+A **create** API adds a new record (object) to the data object store (the database table).
+Mindbricks automatically generates parameters for each **non-calculated Data Property** of the associated Data Object.
+These parameters represent the fields that the client may populate when creating a new record.
+
+Mindbricks also determines which parameters are visible to the client, which are session-based, and which are managed internally — keeping the API interface minimal but complete.
+
+#### **Automatic Parameter Mapping**
+
+| Parameter Attribute | Derived From                                          |
+| ------------------- | ----------------------------------------------------- |
+| **name**            | Same as the Data Property name                        |
+| **description**     | Same as the Data Property description                 |
+| **type**            | Same as the Data Property type                        |
+| **defaultValue**    | Same as the Data Property default value               |
+| **httpLocation**    | `body` (for all data parameters except session-based) |
+| **dataPath**        | Same as the Data Property name                        |
+
+All properties except **calculated ones** are exposed as API parameters in `create` APIs.
+
+---
+
+#### **Session Parameters**
+
+If a parameter’s **`httpLocation`** is set to `session`, its value is read directly from the **session context** rather than from the client request.
+Session parameters are typically hidden from API tools such as Swagger or MCP since they are populated automatically by the system.
+
+When a Data Property is marked as `isSessionData`, its value is fetched from the session using the configured `dataPath`.
+For example, a property like `userId` can automatically take its value from the logged-in user’s session data during record creation.
+
+Unlike calculated properties, **session parameters are still considered API parameters**, because their values are initialized **at the very beginning** of the API execution.
+They are written directly into the context (e.g., `this.userId = this.session.userId`) and are accessible to the **entire workflow**, including validations, access checks, and business actions — not just to the data clause.
+
+In contrast, **calculated properties** (such as formula, context, or static join properties) are evaluated **later**, right after the data clause is built and just before the database operation.
+
+---
+
+#### **Calculated Properties**
+
+Calculated Data Properties are excluded from the client interface because their values are determined automatically by Mindbricks.
+A property is treated as **calculated and hidden** if it falls into one of these categories:
+
+1. **Formula Properties** — calculated using an MScript expression defined in the Data Property’s `formula` setting.
+
+2. **Context Properties** — read from the API context (usually prepared by previous workflow actions).
+
+3. **Static Join Properties** — resolved through a static join relationship with another Data Object, automatically fetched and written into the data clause.
+
+Because their values are internally managed, no automatic API parameters are generated for calculated properties.
+
+---
+
+#### **Client-Defined IDs in Create APIs**
+
+Although Mindbricks automatically generates record IDs (e.g., UUID for PostgreSQL, ObjectId for MongoDB), each create API also has a **built-in, optional&#x20;****`id`****&#x20;parameter** named according to the Data Object (e.g., `customerId`, `productId`).
+This parameter is hidden by default and not required, but if the client includes a valid `id` value in the request body, Mindbricks will **use that value instead of generating a new one** when inserting the record.
+
+---
+
+### **Update-Type APIs**
+
+An **update** API modifies an existing record of a Data Object.
+Parameter generation for update APIs follows the same logic as create APIs, with a few key differences:
+
+1. **All non-calculated properties** are again converted into API parameters.
+   However, by default, their **`required`** flag is set to `false`, since updates do not need all fields to be provided.
+
+2. A property can still be made **required in update operations** by setting the Data Property’s `requiredInUpdate` attribute to `true`.
+
+3. If a Data Property’s **`allowAutoUpdate`** is disabled, it will **not be created as an API parameter**, though it may still be updated internally within business logic if `allowUpdate` is open.
+
+---
+
+#### **Recalculation of Calculated Properties**
+
+Calculated properties are not always re-evaluated during update operations.
+Their recalculation depends on the property’s configuration:
+
+- **Formula properties** are re-computed only when one of the fields listed in their `calculateWhenInputHas` attribute is updated.
+
+- **Static join properties** are re-fetched when their foreign key field changes in the same update request.
+
+This ensures performance efficiency while maintaining logical consistency.
+
+---
+
+#### **Automatic ID Parameter**
+
+Every update API includes an **auto-generated ID parameter** that identifies which record to modify.
+This parameter is named using the Data Object’s name (e.g., `customerId`, `productId`, `messageId`) and is automatically linked to the API’s REST route path.
+For example:
+
+```
+PATCH /updateMessage/:messageId
+```
+
+The same ID parameter structure is also used in **get** and **delete** APIs when `autoParams` is enabled.
+Its `httpLocation` is set to `urlpath`, making it automatically extracted from the route during execution.
+
+---
+
+In summary:
+
+- **Create APIs** build parameters for every non-calculated property and initialize session data early.
+
+- **Update APIs** mirror this logic but adjust requiredness and recalculation rules, while also introducing an **ID parameter** to target specific instances.
+  Together, these mechanisms allow Mindbricks to generate powerful, self-adapting APIs with minimal configuration.
+
+## **Get and Delete Type APIs**
+
+When **`autoParams`** is set to `true` for a **get** or **delete** API, Mindbricks automatically generates a single **ID parameter**.
+This parameter identifies the specific record the API will operate on, and its name is derived from the associated Data Object — for example:
+`countryId`, `itemId`, or `productId`.
+
+For **REST-based APIs**, this ID parameter is automatically placed in the **URL path**, while for other controller types (such as gRPC, Kafka, or Socket), it is placed inside the **request body**.
+
+---
+
+### **Example Route Paths**
+
+For a `product` Data Object, the following routes are generated automatically:
+
+| API Type          | Example Route Path     | HTTP Method |
+| ----------------- | ---------------------- | ----------- |
+| **getProduct**    | `/products/:productId` | GET         |
+| **deleteProduct** | `/products/:productId` | DELETE      |
+
+In these routes:
+
+- `:productId` represents the auto-generated ID parameter.
+
+- This parameter is **required** and must always be supplied in the request path.
+
+---
+
+### **Targeting One Record**
+
+A **get** or **delete** API always targets **exactly one record** of the main Data Object.
+Bulk deletions or multi-record retrievals can still be achieved for **child or related objects** through the API’s **business logic actions**, but at the **main object level**, Mindbricks enforces strict single-record targeting.
+
+This single-record constraint is guaranteed by the **primary&#x20;****`whereClause`**, which Mindbricks automatically limits to one record  using:
+
+- the **auto-generated ID parameter** (e.g., `productId`, `customerId`),
+
+- a set of **where clause parameters** that are internally constrained to match one record only.
+
+This ensures deterministic routing, safe data operations, and predictable workflow behavior for all get and delete APIs.
+
+Here’s your refined **Select Parameter** section — rewritten for clarity, flow, and consistency with the rest of your documentation style:
+
+---
+
+## **The Select Parameters**
+
+All Business APIs except **create-type** have a **`whereClause`**, which is automatically built according to configuration.
+By default, `get`, `update`, and `delete` APIs use the **ID parameter** (located in the URL path) as the selection criterion, so this ID parameter is automatically added to the API parameters.
+
+However, the ID parameter is not the only possible way to select a Data Object.
+The **`selectBy`** property of the `whereClause` defines which fields are used to identify a specific record.
+By default, it contains the ID parameter, but in **get**, **update**, and **list** APIs, you can configure it as an **array of properties**.
+This allows you to select records using other fields — for example, by `email`, `code`, or any combination of properties.
+
+For **delete** APIs, Mindbricks always prioritizes the ID parameter as the first selection criterion for security reasons, even if additional conditions exist.
+
+When the `selectBy` configuration includes different properties besides the ID, Mindbricks automatically generates parameters for each of those properties as well.
+These are known as **select parameters** and are created automatically by the system.
+Here’s your clarified version of that single sentence:
+
+---
+
+### **Behavior of Select Parameters**
+
+- **Automatic generation:**
+  Select parameters are automatically created based on the `selectBy` configuration.
+
+- **Independence from&#x20;****`autoParams`****:**
+  They are generated **even if&#x20;****`autoParams`****&#x20;is disabled**, ensuring that the API always has the parameters it needs to resolve the `whereClause`.
+
+- **Typical usage:**
+  In most cases, the default `selectBy` includes only the ID parameter.
+  Example:
+
+  ```javascript
+  GET /products/:productId
+  DELETE /users/:userId
+  ```
+
+  However, you can define alternatives like:
+
+  ```json
+  "selectBy": ["email"]
+  ```
+
+  which would create a parameter `email` instead of (or in addition to) `userId`.
+
+- **Parameter locations:**
+  The **HTTP location** of select parameters is configured automatically — the **ID parameter** is expected in the `urlpath`, while all other select parameters are expected in the **query parameters**.
+  However, if you manually design a route path and include other parameter names in the URL, Mindbricks automatically expects those parameters in the `urlpath` as well.
+  For example, for a route like:
+
+  ```
+  listUserMembershipsInOrganization
+  /userMembershipsInOrganization/:userId/:organizationId
+  ```
+
+  both `userId` and `organizationId` parameters will be read from the **URL path**.
+
+- **Custom parameters reference:**
+  If your API requires **other property-based criteria** in the `whereClause` that reference additional parameters (for example, combining filters like `email` and `organizationId`), you can create those parameters manually in the **custom parameters** section (see ***Custom Parameters***).
+
+---
+
+Select parameters are one of the most practical tools in Mindbricks for precisely identifying the record you want to work with.
+They simplify the logic for both human and AI architects by providing clear, predictable selection criteria that align with the `whereClause` configuration.
+A deeper explanation of `selectBy` behavior and compound filtering logic will be provided in the ***Where Clause Settings*** section.
+
+## **List Type APIs**
+
+In **list-type** Business APIs, no Data Property is converted into an API parameter automatically — the **`autoParams`** setting has **no effect** for list APIs.
+By default, a standard list API retrieves **all records** from the associated Data Object store.
+
+However, returning all records is generally **not recommended** unless it is explicitly required.
+In most cases, a list API should define **`selectBy`** properties within its `whereClause` to determine **which group of records** the API is structurally designed to list.
+These `selectBy` properties are automatically converted into **API parameters** by Mindbricks and form part of the API’s fundamental logic, not its runtime filtering.
+
+For example, a list API designed to return all memberships belonging to a specific user within an organization could be defined as:
+
+```
+listUserMembershipsInOrganization
+/userMembershipsInOrganization/:userId/:organizationId
+```
+
+In this case, both `userId` and `organizationId` are automatically generated as **select parameters** and are read from the **URL path**.
+
+This design ensures that list APIs always represent a **well-defined logical relationship** (such as memberships of a user, orders of a customer, or items in a category), rather than performing arbitrary filtering or search operations.
+
+### **Pagination Parameters**
+
+List-type APIs also include optional **pagination parameters**, which are automatically read from the **URL query** section of the request.
+These parameters are used to manage result navigation and page size during response generation.
+The detailed configuration of pagination behavior — including supported parameters and response structure — is explained in the ***Pagination Options*** section.
+
+---
+
+## **Custom Parameters**
+
+Mindbricks allows both human and AI architects to define **custom parameters** manually when a Business API requires additional inputs that are not generated automatically.
+Custom parameters are defined as a `BusinessApiParameter` array under the **`customParameters`** property of the API.
+
+These parameters are extracted from the incoming request (e.g., body, query, or session) and written to the API context as `this.<name>` **before the workflow execution begins**.
+They are fully documented and visible to clients, allowing them to provide the necessary values at runtime.
+
+Just like automatically generated parameters, **custom parameters** can be used anywhere in the API’s business logic — for example:
+
+- in the **data clause**,
+
+- in the **where clause**,
+
+- during **validation or condition checks**,
+
+- in **fetch or enrichment actions**,
+
+- or for **custom output behaviors**.
+
+---
+
+### **Use Cases**
+
+A common use case for custom parameters is to **limit data entry in update routes**.
+For example, if you only need to approve or reject a membership, you may only require an `approvalResult` parameter for the update logic.
+If `autoParams` is active, all properties of the Data Object would otherwise be read from the controller, which is unnecessary.
+In such cases, you can disable `autoParams` or simply define the parameters you need in the **`customParameters`** section to keep the API interface minimal and explicit.
+
+Custom parameters can be used **together with** or **independently from** automatic parameters.
+When used together, if a **custom parameter** has the **same name** as an automatically generated parameter, it **overrides** the automatic one.
+This mechanism allows you to modify or extend the behavior of existing parameters — for example, by adding a custom `transform` script or a different `httpLocation`.
+
+---
+
+### **Example**
+
+```json
+{
+  "customParameters": [
+    {
+      "name": "sendResultAsEmail",
+      "type": "Boolean",
+      "required": false,
+      "defaultValue": false,
+      "httpLocation": "query",
+      "dataPath": "sendResultAsEmail",
+      "transform": null,
+      "hidden": false,
+      "description": "Use this parameter to instruct the API to send the result to the current user's email address stored in the session."
+    }
+  ]
+}
+```
+
+Custom parameters act as an **extension mechanism** that enables developers to define precise, business-specific inputs — whether to replace default behavior, control update flows, or introduce custom runtime logic.
+
+---
+
+## **Redis Parameters**
+
+Although any value can be fetched from Redis within the workflow using Redis-related actions, Mindbricks also allows you to define **Redis parameters** that are read **automatically at the beginning of API execution**.
+This makes it possible to inject cached or server-side state values into the API context before the main business logic starts — enabling their use in **parameter checks**, **transform scripts**, or **workflow conditions**.
+
+Redis parameters are defined as an array of **`RedisApiParameter`** objects under the `redisParameters` property.
+Each parameter is read from Redis using a dynamically computed key (defined by an MScript expression) and is written directly to the context as `this.<name>`, making it accessible just like other parameters.
+
+---
+
+### **Structure**
+
+```json
+"RedisApiParameter": {
+  "name": "String",
+  "type": "DataTypes",
+  "required": "Boolean",
+  "defaultValue": "AnyComplex",
+  "redisKey": "String"
+}
+```
+
+| Field            | Description                                                                                                                                                   |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **name**         | The name under which the Redis value will be stored in the API context (e.g., `this.tenantConfig`).                                                           |
+| **type**         | The expected data type for the Redis value (e.g., `String`, `Boolean`, `Object`). Used for validation and type enforcement.                                   |
+| **required**     | If `true`, the API will throw an error if the Redis key is missing or the value is `null`.                                                                    |
+| **defaultValue** | An optional fallback value if the Redis lookup fails, allowing the workflow to continue gracefully.                                                           |
+| **redisKey**     | An MScript expression that evaluates to the Redis key from which the value is fetched. This can reference dynamic context data such as `this.session.userId`. |
+
+---
+
+### **Example**
+
+In the following example, a Redis parameter named `tenantConfig` is fetched from Redis using a key that includes the current tenant’s ID from the session context:
+
+```json
+{
+  "redisParameters": [
+    {
+      "name": "tenantConfig",
+      "type": "Object",
+      "required": true,
+      "defaultValue": {},
+      "redisKey": "`tenantConfig:${this.session.tenantId}`"
+    }
+  ]
+}
+```
+
+In this configuration:
+
+- Mindbricks reads the value from Redis **before** workflow execution begins.
+
+- The result is stored in `this.tenantConfig` and becomes available for use in the **parameter transform logic**, **data clause building**, **validations**, or **custom actions**.
+
+Redis parameters thus serve as a bridge between **cached server-side state** and **runtime logic**, ensuring your Business API can start execution with the most up-to-date contextual data already in memory.
+
+Here’s your refined **Understanding API-Level Authentication and Authorization** section, fully consistent with your documentation style and tone:
+
+---
+
+## **Understanding API-Level Authentication and Authorization**
+
+Authentication and authorization are **fundamental concepts** in Mindbricks, supported by powerful patterns and tools that give both human and AI architects a **flexible foundation** for managing user access.
+The authentication logic is distributed across multiple layers — **application**, **service**, **data object**, and finally, the **API level** — each providing its own control mechanisms and configuration depth.
+
+At the **API level**, Mindbricks offers both **simple configuration options** and **advanced, action-based designs** to control access.
+For a deeper understanding of roles, permissions, and access control principles, see the ***General Authentication and Authorization in Mindbricks*** document.
+In this section, we assume the reader is already familiar with those concepts.
+Here we focus specifically on how they are applied at the API layer — where additional concepts like **ownership**, **membership**, and **nested access scope** can also be enforced.
+
+---
+
+### **Basic Auth Configuration**
+
+The basic configuration of authentication and authorization for a Business API is handled through the **`authOptions`** property, which uses the **`ApiAuthOptions`** pattern.
+These settings are sufficient for most scenarios and cover session validation, role and ownership checks, and tenant-level access control.
+
+```json
+"authOptions": "ApiAuthOptions"
+```
+
+---
+
+### **ApiAuthOptions Structure**
+
+| Field                     | Description                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **apiInSaasLevel**        | If `true`, the API can be accessed across tenants (SaaS-wide). This bypasses tenant ID filtering and is allowed only for users with SaaS-level roles. Used for global admin tools or cross-tenant analytics.                                                                                                                                                                                                                                           |
+| **loginRequired**         | Specifies whether the user must be authenticated to access the API. By default, this inherits the login requirement from the associated Data Object, but it can be overridden here.                                                                                                                                                                                                                                                                    |
+| **ownershipCheck**        | Enables ownership validation on the main Data Object. This restricts access to the record’s owner. In list APIs, the check is applied within the query; in others, it occurs after the instance is fetched.                                                                                                                                                                                                                                            |
+| **parentOwnershipChecks** | Lists parent objects (e.g., `organization`, `project`) whose ownership must also be verified. This enforces multi-level ownership hierarchies across related entities.                                                                                                                                                                                                                                                                                 |
+| **absoluteRoles**         | A list of roles that grant unconditional access to this API. Users with any of these roles bypass all authentication and authorization checks (including role, permission, ownership, and membership validations). Business-level validations (such as required fields or value constraints) still apply. The `superAdmin` role is assumed absolute by default.                                                                                        |
+| **checkRoles**            | A list of roles that must be held by the user to pass the API’s basic role validation. These are not absolute — users with these roles still undergo ownership, permission, or contextual checks unless also included in `absoluteRoles`. Multiple roles are combined using OR logic.                                                                                                                                                                  |
+| **defaultPermissions**    | A list of required permissions that the user must hold globally or through a role/group. For `get`, `update`, and `delete` APIs, object-level overrides may also apply if the Data Object supports object permissions. Multiple permissions are combined using AND logic. For complex or conditional access scenarios, use explicit access control actions such as `PermissionCheckAction`, `MembershipCheckAction`, or `ObjectPermissionCheckAction`. |
+
+---
+
+### **Extending Authorization with Actions**
+
+While the configuration above covers most common cases, Mindbricks also supports **fine-grained, action-based authorization**.
+When more dynamic or context-sensitive access control is needed — such as conditional permissions, time-based access, or ownership linked to related entities — you can extend your API workflow using dedicated Business API Actions like:
+
+- `PermissionCheckAction`
+
+- `MembershipCheckAction`
+
+- `ObjectPermissionCheckAction`
+
+These actions can be placed at specific **workflow milestones** to customize or reinforce authorization logic beyond static configuration.
+
+---
+
+Here’s your refined version of the **Absolute Role Check** section, written to match your documentation tone and with clear, formal explanations:
+
+---
+
+### **The Absolute Role Check**
+
+In a Business API, a user who holds an **absolute role** is **exempt from all authorization checks**.
+Mindbricks automatically recognizes and processes standard authorization mechanisms such as **role**, **permission**, **membership**, and **ownership** validations.
+However, when you design **custom authorization logic** using a `ValidationAction`, Mindbricks determines whether absolute users are exempt based on the **validation’s response status**.
+
+If the validation returns a **403 (Forbidden)** status — meaning the rule represents an **authorization restriction** — then users with absolute roles are **exempt** from that validation.
+But if the validation returns a **400 (Bad Request)** status — meaning it represents a **business logic constraint** rather than an authorization rule — then the absolute role **does not bypass** it.
+
+For example:
+If products marked with `isProtected` should not be updated, you must decide whether this restriction is **an authorization rule** or **a business rule**.
+
+- If the restriction is **about authorization** (e.g., only certain roles are allowed to modify protected products), you should implement the validation with **status 403**, allowing absolute users to bypass it.
+
+- If the restriction is **about logical consistency** (e.g., protected products should never be changed regardless of role), use **status 400** so that even absolute users are blocked.
+
+This distinction ensures that **absolute roles override only authorization constraints**, not fundamental business rules, maintaining both **security flexibility** and **domain integrity** in your Mindbricks APIs.
+
+---
+
+### **Summary**
+
+At the API level, Mindbricks provides a **multi-layered access control model** that combines session validation, role checks, ownership rules, and permission-based logic into a single, coherent system.
+These mechanisms work together to ensure that each API operates within a secure and predictable access framework while still allowing flexibility for custom logic.
+
+- **Authentication:**
+  Determines whether the user must be logged in to access the API.
+  This is controlled by `loginRequired`, which can override the default inherited from the Data Object.
+
+- **Authorization:**
+  Defines *who* can access the API and *under what conditions*.
+  It is primarily managed through roles, permissions, and ownership settings.
+
+- **Roles:**
+  Roles are the main layer of access control.
+
+  - `checkRoles` defines the roles that must be held to pass the API’s base authorization checks.
+
+  - `absoluteRoles` define **unconditional access**. A user with an absolute role bypasses all other authorization checks — including roles, permissions, ownership, membership, and even custom 401/403 validation actions.
+
+    - However, business logic validations (e.g., missing fields, logical constraints) are **not bypassed**.
+
+    - In custom validation actions, Mindbricks distinguishes between **authorization errors (403)** and **business rule errors (400)**.
+
+      - A validation with status **403** will be ignored for absolute users.
+
+      - A validation with status **400** will still apply, even to absolute users.
+
+- **Ownership and Parent Ownership Checks:**
+  Ownership ensures that the current user can only act on their own records.
+  Parent ownership extends this to related entities such as organizations or projects, allowing hierarchical control.
+
+- **Permissions:**
+  Permissions represent explicit rights assigned to users or roles.
+  They can be global or object-scoped, depending on the Data Object’s configuration.
+  Complex or conditional permission logic can be implemented through workflow actions like `PermissionCheckAction`, `MembershipCheckAction`, or `ObjectPermissionCheckAction`.
+
+- **Tenant Scope:**
+  When `apiInSaasLevel` is set to `true`, the API operates across all tenants (SaaS-wide).
+  Only users with SaaS-level roles can access such APIs, as tenant-level isolation is bypassed.
+
+---
+
+In summary, Mindbricks authentication and authorization at the API level combine **static configuration** and **dynamic workflow logic** to provide precise, adaptable access control.
+Through `authOptions`, you can cover most common scenarios; and by layering **authorization actions** or **validation-based conditions**, you can build complex, context-aware security models.
+The **absolute role system** adds an essential override mechanism — granting trusted users unrestricted access where necessary while keeping business rule enforcement intact.
+
+Here’s a complete and well-structured **Understanding API Controllers** section, written in your documentation tone, fully aligned with the pattern references you provided.
+
+---
+
+## **Understanding API Controllers**
+
+In Mindbricks, **API controllers** define *how* a Business API can be accessed or triggered.
+While all APIs share the same logical workflow and business structure, controllers determine **the communication interface** — whether the API is invoked through a REST request, a gRPC call, a Kafka event, a WebSocket channel, or a scheduled cron job.
+
+Each Business API can have **multiple controllers**, but by default, only the **REST controller** is enabled.
+Other controllers (`gRPC`, `Kafka`, `Socket`, `Cron`) are disabled unless explicitly configured.
+
+Controllers can be divided into two main groups:
+
+1. **Request-based controllers** – `REST`, `gRPC`, and `Socket`
+   These are used when a client or user actively calls the API.
+
+2. **Event- or schedule-based controllers** – `Kafka` and `Cron`
+   These are used for asynchronous or automated API execution.
+
+---
+
+### **REST Controller**
+
+The **REST controller** is the **default and most common** API controller in Mindbricks.
+When enabled, it exposes the Business API as a standard HTTP endpoint that follows RESTful conventions.
+
+```json
+"ApiRestSettings": {
+  "hasRestController": true,
+  "configuration": {
+    "routePath": "$default"
+  }
+}
+```
+
+#### **Behavior**
+
+- **Enabled by default** (`hasRestController = true`) for every Business API.
+
+- The REST path is automatically generated from the API’s `name` and `crudType` unless a custom route path is provided.
+
+- All parameter locations (`httpLocation`) such as `body`, `query`, and `urlpath` are applied according to REST conventions.
+
+- This controller is typically used by client applications, web frontends, or other services through direct HTTP requests.
+
+Example:
+
+```
+POST /users
+GET /users/:userId
+DELETE /users/:userId
+PATCH /users/:userId
+```
+
+If you want to override the route path, you can set a custom path in `configuration.routePath` (details covered in **Route Path Logic**).
+
+Here’s your **Route Path** paragraph, consistent with your documentation style and structure:
+
+---
+
+### **Route Path**
+
+In REST controllers, the **route path** determines the HTTP endpoint through which a Business API is accessed.
+If the route path is left **`null`** or explicitly set to **`$default`**, Mindbricks automatically generates it based on the API’s **name** and **crudType**, following RESTful conventions (for example, `POST /users`, `GET /users/:userId`, or `PATCH /users/:userId`).
+
+You can also **manually define a custom route path** using the `routePath` property in the REST controller configuration.
+When you provide your own route, Mindbricks will use it as-is, while still applying standard HTTP method logic according to the API type.
+
+Additionally, you can include **parameter names** directly in the custom route path (e.g., `/userMemberships/:userId/:organizationId`).
+When such parameters are present in the route definition, Mindbricks automatically recognizes them as **URL path parameters** and makes them available in the API context (`this.<paramName>`).
+This provides full flexibility to design APIs with clear and meaningful routes while preserving the consistency of parameter handling and RESTful conventions.
+
+---
+
+### **gRPC Controller**
+
+The **gRPC controller** allows high-performance, binary communication between services — ideal for internal service-to-service calls.
+It is **disabled by default** and must be explicitly enabled when needed.
+
+```json
+"ApiGrpcSettings": {
+  "hasGrpcController": true,
+  "configuration": {
+    "responseFormat": "fullResponse",
+    "responseType": "single"
+  }
+}
+```
+
+#### **Behavior**
+
+- All API parameters are read from the **message body**, except session parameters (which are still read from the session object in the request context).
+
+- Supports two response configurations:
+
+  - **`responseFormat`** → `dataItem` or `fullResponse`
+
+  - **`responseType`** → `single` or `stream`
+
+- gRPC controllers are particularly useful for **inter-service operations** within large microservice architectures where low latency is critical.
+
+---
+
+### **Kafka Controller**
+
+The **Kafka controller** is designed for **event-driven** architectures.
+When enabled, it allows a Business API to be **triggered by Kafka messages** — either from the same service or another service within the system.
+
+```json
+"ApiKafkaSettings": {
+  "hasKafkaController": true,
+  "configuration": {
+    "requestTopicName": "order-created",
+    "responseTopicName": "order-processed"
+  }
+}
+```
+
+#### **Behavior**
+
+- **Disabled by default** and must be explicitly activated.
+
+- Used to handle logic automatically after an event occurs (for example, “order created”, “payment received”, “file uploaded”).
+
+- Parameters are read from the **message body**, except for session parameters (still read from the session context if present).
+
+- Ideal for **asynchronous workflows**, **integration pipelines**, and **decoupled event reactions** across services.
+
+Example:
+
+- A `productInventoryUpdated` API could be triggered by a Kafka message from an `orderService` when an order is confirmed.
+
+- The request topic might be named:
+
+  ```
+  rentworld-orders-service-order-confirmed
+  ```
+
+Kafka controller usage and topic naming conventions will be detailed further in the **Kafka Topic Naming** section.
+
+---
+
+### **Kafka Topic Naming**
+
+In Mindbricks, **Kafka topics** are named automatically following the same structured pattern used for API and database events.
+Each event published from an API follows a clear naming convention:
+
+```
+{projectCodeName}-{serviceName}-service-{resourceName}-{apiActionInPassiveForm}
+```
+
+For example:
+
+```
+rentworld-catalog-service-vehicle-created
+```
+
+Two types of events are published automatically:
+
+- **API Events (****`apiEvents`****)** — emitted after API execution (e.g., `user-created`, `product-deleted`).
+
+- **Database Events (****`dbEvents`****)** — emitted for every database operation performed during API execution (e.g., `profile-updated`, `orderitem-inserted`).
+
+While these are generated automatically, you can also **subscribe to or trigger APIs from external Kafka topics** — for example, when another microservice in your system publishes events to the same Kafka cluster.
+To do this, simply ensure that:
+
+- The **topic name** in your `ApiKafkaSettings` matches the external publisher’s topic.
+
+- The **parameter paths** (such as `dataPath` or `redisKey`) correctly reference fields within the incoming message payload.
+
+Additionally, within the workflow, when you publish an event manually using **PublishEventAction** (explained in the Actions section), you can freely design your own **custom topic names**.
+Those custom topics can later be used to **trigger other APIs** in the same or different services — making event-driven orchestration between APIs seamless and fully customizable in Mindbricks.
+
+---
+
+### **Socket Controller**
+
+The **Socket controller** enables a Business API to be **triggered through a WebSocket port**, allowing bidirectional communication between the server and connected clients.
+Unlike the Realtime Service (which manages event subscriptions and notifications for live data updates), the Socket controller is designed for **direct API invocation over sockets**, where both **requests** and **responses** flow through an open WebSocket channel.
+
+This type of controller is especially useful in **chat services**, **interactive sessions**, or **stream-based applications**, where immediate back-and-forth communication is needed without creating a new HTTP request for each message.
+An API can be triggered **both through REST** and **through a Socket connection** simultaneously, depending on the system design.
+
+```json
+"ApiSocketSettings": {
+  "hasSocketController": true,
+  "configuration": {
+    "socketPort": 50001
+  }
+}
+```
+
+#### **Behavior**
+
+- **Disabled by default**, must be explicitly enabled for APIs that need socket-based triggering.
+
+- The **socketPort** defines the port where the API listens for socket connections.
+  If no port is specified, Mindbricks defaults to **50001**.
+
+- When triggered via socket:
+
+  - All parameters (except session parameters) are read from the **socket message body**.
+
+  - Session parameters are still resolved from the session object in the request context.
+
+- The **response** is streamed back to the same socket connection after API execution completes (or progressively, if the workflow supports streaming).
+
+Example use case:
+
+- A `sendChatMessage` API can be triggered from a connected socket client:
+
+  ```
+  ws://chat.myapp.com:50001
+  ```
+
+  The client sends a JSON payload containing the message, and the server replies directly to the same socket stream with the processed message data or confirmation.
+
+---
+
+The Socket controller thus provides a **low-latency communication channel** for APIs that need to maintain real-time conversational or transactional state over persistent connections — while still supporting REST invocation when required.
+
+---
+
+### **Cron Controller**
+
+The **Cron controller** allows automatic API execution on a **time schedule**.
+It is **disabled by default**, but when enabled, Mindbricks will trigger the API at fixed intervals defined by a cron expression.
+
+```json
+"ApiCronSettings": {
+  "hasCronController": true,
+  "configuration": {
+    "cronExpression": "0 * * * *"
+  }
+}
+```
+
+#### **Behavior**
+
+- Executes the API periodically according to the configured **cron expression**.
+  Example: `"0 * * * *"` means the API runs **every hour**.
+
+- A cron API **cannot have controller parameters**, since it is not triggered by a client or message.
+  However, it can still read data from:
+
+  - The **database** (Data Object queries),
+
+  - **Redis** (Redis parameters or actions),
+
+  - or other internal sources to perform scheduled business logic.
+
+- Common use cases include background cleanup jobs, periodic recalculations, data synchronization, or automated maintenance.
+
+---
+
+### **Controller Parameter Rules**
+
+| Controller | Parameter Source                      | Notes                                                           |
+| ---------- | ------------------------------------- | --------------------------------------------------------------- |
+| **REST**   | `httpLocation` (body, query, urlpath) | Default parameter mapping.                                      |
+| **gRPC**   | Message body                          | Session parameters still read from session context.             |
+| **Kafka**  | Message body                          | Event payload as input, session read from context if available. |
+| **Socket** | Message body                          | Session parameters resolved from session.                       |
+| **Cron**   | No parameters                         | Reads required data internally (DB, Redis, etc.).               |
+
+---
+
+### **Design Guidance**
+
+When designing controllers for a Business API:
+
+- **REST** is ideal for client and web access.
+
+- **gRPC** is best for internal service communication.
+
+- **Kafka** should be used for event-driven flows and asynchronous logic.
+
+- **Socket** supports real-time interaction and live state updates.
+
+- **Cron** automates periodic background execution.
+
+Mindbricks allows combining multiple controllers for the same API when appropriate.
+For instance, an API may be accessible via **REST** for user-triggered operations and via **Kafka** for event-driven automation.
+
+---
+
+## **CRUD Type Based Options**
+
+The **BusinessApi** pattern in Mindbricks acts as a **container pattern** for all API types — `create`, `update`, `delete`, `get`, and `list`.
+While most of its configuration settings are shared across all APIs, some attributes are **specific to certain CRUD types** and are used only when the API’s `crudType` matches their purpose.
+
+These CRUD-type–specific configurations allow each API to precisely define **how it selects data**, **how it modifies data**, and **how it structures responses**.
+For example, `create` and `update` APIs use a **`dataClause`**, while `get` and `list` APIs use a **`selectClause`**.
+Similarly, pagination or deletion-related options apply only to the APIs where they make sense.
+
+In this section, we will examine each of these settings —
+
+- `selectClause`
+
+- `dataClause`
+
+- `whereClause`
+
+- `deleteOptions`
+
+- `getOptions`
+
+- `listOptions`
+
+- `paginationOptions`
+
+and understand how they interact with the corresponding CRUD types and overall API behavior.
+
+Each subsection will describe the **purpose**, **scope**, and **typical use cases** of the setting, along with notes on how it integrates into the Business API workflow and Mindbricks automation logic.
+
+### **Select Clause Settings**
+
+The **select clause** defines which fields of a Data Object are included in the **response output** of a Business API.
+It is applicable only to **`get`** and **`list`** type APIs and should be left `null` or undefined for other API types (`create`, `update`, or `delete`).
+
+This clause allows architects to limit the returned properties for performance or visibility control — for example, to hide internal attributes or sensitive information from the API response.
+
+```json
+"SelectClauseSettings": {
+  "selectProperties": ["PropRefer"]
+}
+```
+
+| Field                | Description                                                                                                                                                                                |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **selectProperties** | An array of property names to include in the API response. Leave empty to return all properties. Each property must belong to the current Data Object — **dot notation is not supported**. |
+
+#### **Behavior**
+
+- When **`selectProperties`** is empty, the API returns all visible properties of the main Data Object.
+
+- When populated, only the listed properties are included in the response.
+
+- The clause is evaluated **after access control and data fetch**, ensuring ownership, permissions, and visibility rules are applied before shaping the final output.
+
+- The **selectable properties** are automatically validated against the current Data Object’s schema.
+
+- Joined or related data must now be retrieved either through **Fetch-type actions** or via **DataViews** in the BFF layer.
+
+#### **Example**
+
+To return only specific fields such as `id`, `name`, and `price` from the Product Data Object:
+
+```json
+"selectClause": {
+  "selectProperties": ["id", "name", "price"]
+}
+```
+
+This configuration ensures that the API response contains only the defined fields — improving response performance and maintaining strict control over what data is exposed.
+
+### **Data Clause Settings**
+
+The **data clause** defines additional or overriding values used in **create** and **update** operations of a Business API.
+It acts as the final layer where the actual data written to the database is assembled.
+This clause supplements the automatically constructed data object with extra computed values, context-based assignments, or business-specific overrides.
+
+```json
+"DataClauseSettings": {
+  "customData": ["DataMapItem"]
+}
+```
+
+| Field          | Description                                                                                                                                                                                                             |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **customData** | An array of key–value assignments written in **MScript**. Each item defines a data field (`name`) and its value (`value`). These values are injected or override existing fields in the data clause before persistence. |
+
+---
+
+#### **Create-Type APIs**
+
+In `create` APIs, **all Data Object properties** are automatically added to the data clause, regardless of whether `autoParams` is enabled.
+However, you can still define **custom data entries** to override specific fields or inject additional values.
+
+Example:
+
+```json
+"dataClause": {
+  "customData": [
+    { "name": "createdAt", "value": "NOW()" },
+    { "name": "status", "value": "'started'" }
+  ]
+}
+```
+
+- Automatically adds all non-calculated properties to the create payload.
+
+- Custom data entries **override** any automatically generated fields.
+
+- Properties marked as `alwaysCreateWithDefaultValue` are **never read from parameters** — their default values are always applied directly.
+
+---
+
+#### **Update-Type APIs**
+
+In `update` APIs, the data clause is built based on the **updatable properties** of the Data Object:
+
+- When `autoParams = true`: all updatable properties are added automatically.
+
+- When `autoParams = false`: you must define every data item manually in `customData`.
+
+You can use `customData` even when `autoParams` is enabled to override or redefine specific values (e.g., add transformation logic).
+
+**Best practice:**
+When designing focused update APIs (like `setUserRole` or `approveRequest`), disable `autoParams` and explicitly define the parameters and data clause entries required for that specific business action.
+
+---
+
+#### **Runtime Behavior**
+
+- If a client omits a parameter (value `undefined`), the property is **excluded** from the data clause, keeping the stored database value unchanged.
+
+- If a parameter is explicitly set to `null`, it is **included** in the data clause as `null`; if allowed, the database value is updated to null.
+
+- Automatically created fields (e.g., default statuses like `"started"`) remain governed by their data design rules (`alwaysCreateWithDefaultValue`).
+
+---
+
+#### **Example – Update API with Custom Clause**
+
+```json
+"dataClause": {
+  "customData": [
+    { "name": "approvalResult", "value": "this.approvalResult" },
+    { "name": "approvedAt", "value": "NOW()" }
+  ]
+}
+```
+
+Here, the update API explicitly modifies only `approvalResult` and `approvedAt`, ensuring no other properties are affected — a common design for targeted, role-based updates.
+
+---
+
+### **Where Clause Settings**
+
+The **where clause** defines the **criteria used to locate or constrain records** in a Business API.
+It is applied in `get`, `list`, `update`, and `delete` APIs (but **not** in `create`), and determines which record(s) the API will read, modify, or delete.
+For all API types except `list`, the where clause is expected to identify **a single record**.
+
+```json
+"WhereClauseSettings": {
+  "selectBy": ["PropRefer"],
+  "fullWhereClause": "MScript",
+  "additionalClauses": ["ExtendedClause"]
+}
+```
+
+---
+
+#### **1. selectBy**
+
+`selectBy` is the most common and straightforward way to define the main selection logic.
+It represents an array of **required fields** whose values must match exactly to locate the target record(s).
+In `get`, `update`, and `delete` APIs, these fields are expected to identify **one unique record**, while in `list` APIs, they define the **structural selection** of the record set.
+
+Example:
+
+```json
+"whereClause": {
+  "selectBy": ["customerId", "organizationId"]
+}
+```
+
+In this configuration, both `customerId` and `organizationId` must match for the query to succeed.
+All fields in `selectBy` are combined with **AND** logic.
+
+---
+
+#### **2. fullWhereClause**
+
+When complex or dynamic query logic is needed, you can define a **`fullWhereClause`** instead of using `selectBy`.
+This field accepts an **MScript Query**, providing MongoDB-like syntax and full flexibility.
+For example:
+
+```json
+"whereClause": {
+  "fullWhereClause": "{ userId: this.session.userId, date: { $gt: new Date() } }"
+}
+```
+
+**MScript Query behavior:**
+
+- If no operator is specified, equality (`$eq`) is assumed.
+
+- Multiple fields are combined with `$and`.
+
+- You can use advanced operators such as `$gt`, `$lt`, `$in`, `$ne`, `$or`, etc.
+
+- When `fullWhereClause` is defined, the `selectBy` rule is **ignored**.
+
+---
+
+#### **3. additionalClauses**
+
+The **`additionalClauses`** property allows you to append conditional query fragments to the main where clause, whether it’s derived from `selectBy` or `fullWhereClause`.
+Each fragment is defined as an **ExtendedClause**, containing MScript-based conditions that control when the clause is applied.
+
+Example:
+
+```json
+"additionalClauses": [
+  {
+    "name": "ExcludeInactive",
+    "doWhen": "this.session.role != 'superAdmin'",
+    "whereClause": "{ isActive: true }"
+  }
+]
+```
+
+| Field           | Description                                                                 |
+| --------------- | --------------------------------------------------------------------------- |
+| **name**        | Label used for documentation and UI purposes.                               |
+| **doWhen**      | MScript expression — if `true`, the clause is added to the query.           |
+| **excludeWhen** | Inverse condition — the clause is added when this expression is `false`.    |
+| **whereClause** | The conditional query fragment to append (written in MScript Query syntax). |
+
+- Multiple `additionalClauses` are combined using `$and`.
+
+- They can be combined with `selectBy` or `fullWhereClause`, or used standalone if needed.
+
+- If both `doWhen` and `excludeWhen` are omitted, the clause is **always applied**.
+
+---
+
+#### **4. Behavior in Delete APIs**
+
+In **delete** APIs, the where clause is **automatically built** by Mindbricks using the record’s ID as the selection criterion — for example:
+
+```javascript
+{ id: this.customerId }
+```
+
+This ensures that delete operations always target **one record** safely.
+
+In delete APIs:
+
+- `selectBy` and `fullWhereClause` are **ignored**.
+
+- `additionalClauses` can still be used to add security or logical restrictions (e.g., `{ isDeletable: true }`).
+
+- The final query is built by combining the ID condition with all applicable `additionalClauses` using `$and`.
+
+---
+
+#### **5. Combining Rules**
+
+- If both `selectBy` and `fullWhereClause` are defined, only **`fullWhereClause`** is used.
+
+- `additionalClauses` are **always merged** into the final query using `$and`.
+
+- To implement `$or` or more advanced logic, define it directly in the `fullWhereClause`.
+
+---
+
+#### **Example – Complex Case**
+
+```json
+"whereClause": {
+  "fullWhereClause": "{ $or: [ { userId: this.session.userId }, { isPublic: true } ] }",
+  "additionalClauses": [
+    {
+      "name": "SoftDeleteFilter",
+      "doWhen": "true",
+      "whereClause": "{ isDeleted: { $ne: true } }"
+    }
+  ]
+}
+```
+
+In this example:
+
+- The base logic selects all records owned by the current user **or** marked as public.
+
+- An additional clause ensures soft-deleted records are excluded.
+
+---
+
+The **where clause** is therefore the **core targeting mechanism** in Business APIs.
+It defines how Mindbricks locates and secures records during execution — whether using simple structural selection (`selectBy`), fully dynamic logic (`fullWhereClause`), or conditional fragments (`additionalClauses`).
+
+### **Get Options**
+
+The **Get Options** section defines configuration options specific to **`get`****-type Business APIs**, allowing architects to customize what happens when a single record is fetched.
+These options extend the default behavior of `get` APIs — which normally only retrieve a record — by allowing additional post-fetch logic such as marking records as read or viewed.
+
+```json
+"GetOptions": {
+  "setAsRead": ["DataMapItem"]
+}
+```
+
+| Field         | Description                                                                                                                                                                                                                                                       |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **setAsRead** | An optional array of **field–value assignments** (defined as `DataMapItem`) that are executed immediately **after the record is retrieved**. This can be used to mark the record as “read,” “seen,” “viewed,” or to update other status fields related to access. |
+
+Each `DataMapItem` represents a field name and an **MScript expression** that determines the value to be written:
+
+```json
+{
+  "name": "isRead",
+  "value": "true"
+}
+```
+
+---
+
+#### **Behavior**
+
+- The `setAsRead` actions are applied **after** the main record is fetched but **before** the API response is sent.
+
+- They modify the database record or a related audit field to reflect that the record has been accessed.
+
+- These updates are executed within the same transaction context, ensuring that the “read” marking is atomic and consistent.
+
+- If no `setAsRead` configuration is provided, the API performs a standard read operation without any updates.
+
+---
+
+#### **Example**
+
+To automatically mark a message as read when retrieved:
+
+```json
+"getOptions": {
+  "setAsRead": [
+    { "name": "isRead", "value": "true" },
+    { "name": "lastViewedAt", "value": "NOW()" }
+  ]
+}
+```
+
+In this example:
+
+- When the message is fetched through the API, the system automatically sets `isRead = true` and updates the `lastViewedAt` timestamp.
+
+- The user receives the record data as usual, but the backend has also recorded that the message was viewed.
+
+---
+
+This configuration helps build **user-aware APIs** that not only fetch information but also maintain contextual state — such as read receipts, view tracking, or audit trails — directly within the `get` API lifecycle.
+
+### **Delete Options**
+
+The **Delete Options** section defines how a **`delete`****-type Business API** behaves when removing records.
+Mindbricks implements soft delete at the **application level** by using a single boolean field: **`isActive`**. There are **no automatic&#x20;****`deletedAt`****&#x20;or&#x20;****`isDeleted`****&#x20;fields**.
+
+```json
+"DeleteOptions": {
+  "useSoftDelete": true
+}
+```
+
+| Field             | Description                                                                                                                                                                              |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **useSoftDelete** | If `true`, the API performs an **application-level soft delete** by setting **`isActive = false`** on the target record. If `false`, the record is **physically removed** (hard delete). |
+
+---
+
+#### **Configuration Hierarchy**
+
+Soft-delete behavior can be determined at three layers, with the **API layer overriding** the others:
+
+1. **Data Model (application) level** – establishes the default soft-delete policy for the app (i.e., soft-deletable objects use `isActive`).
+
+2. **Data Object level** – a specific object may **opt in/out** of that default (e.g., mark the object as soft-deletable or hard-deletable by design).
+
+3. **API level** – `deleteOptions.useSoftDelete` can **override** both the model and object defaults for this specific API call.
+
+---
+
+#### **Runtime Behavior**
+
+- **Soft delete (****`useSoftDelete: true`****)**
+
+  - Updates the record with **`isActive = false`**.
+
+  - Ownership/permission checks still run.
+
+  - API/DB events are emitted as usual (e.g., `resource-deleted` at API level).
+
+  - The record remains queryable if your `whereClause` allows inactive rows.
+
+- **Hard delete (****`useSoftDelete: false`****)**
+
+  - Physically removes the record.
+
+  - Ownership/permission checks and events still apply.
+
+---
+
+#### **Examples**
+
+Soft delete for this API regardless of object default:
+
+```json
+"deleteOptions": { "useSoftDelete": true }
+```
+
+Hard delete (override model/object soft-delete design):
+
+```json
+"deleteOptions": { "useSoftDelete": false }
+```
+
+This approach keeps soft delete **simple and uniform**—a single, well-understood flag (`isActive`)—while still allowing precise control at the **object** and **API** levels.
+
+---
+
+#### **Notes on&#x20;****`isActive`****&#x20;Scoping**
+
+- **Auto-scoping:** Mindbricks-generated code **automatically injects&#x20;****`isActive: true`** into queries (and designs indexes accordingly) so soft-deleted records are omitted by default.
+
+- **Explicit override:** If you **explicitly** add `isActive: false` to a query (e.g., in `fullWhereClause` or an `additionalClause`), the scope switches to **only deleted** records.
+
+- **Mutual exclusivity:** You **cannot** simultaneously apply the default omission (`isActive: true`) and an explicit `isActive: false`. Declaring `isActive` explicitly **overrides** the default injection for that query’s scope.
+
+This makes the default behavior safe for everyday reads while still allowing targeted access to deleted rows when you intentionally request them.
+
+### **List and Pagination Options**
+
+List-type Business APIs in Mindbricks return **multiple records**, often depending on the user’s permissions, memberships, and context.
+The `listOptions` and `paginationOptions` configurations together define how records are **sorted**, **grouped**, **filtered**, **secured**, and **delivered** in pages.
+
+---
+
+### **List Options**
+
+The **List Options** section customizes how a list API behaves — controlling data organization, security, and post-fetch logic.
+
+```json
+"ListOptions": {
+  "listSortBy": ["SortByItem"],
+  "listGroupBy": ["PropRefer"],
+  "queryCache": false,
+  "setAsRead": ["DataMapItem"],
+  "permissionFilters": ["ListPermissionFilter"],
+  "membershipFilters": ["ListMembershipFilter"]
+}
+```
+
+| Field                 | Description                                                                                                                                               |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **listSortBy**        | Defines sorting rules for the result set (supports multiple fields with direction).                                                                       |
+| **listGroupBy**       | Groups records logically, often used for reports or visual structures.                                                                                    |
+| **queryCache**        | Enables temporary caching of query results to optimize repeated calls.                                                                                    |
+| **setAsRead**         | Allows updating specified fields after listing (e.g., marking records as viewed).                                                                         |
+| **permissionFilters** | Applies permission-based visibility logic. Generates a list of allowed object IDs based on the user’s permissions and limits the query scope accordingly. |
+| **membershipFilters** | Applies membership-based visibility logic. Builds a list of object IDs where the user is a member and restricts results to those objects only.            |
+
+---
+
+#### **Sorting**
+
+You can specify one or more sort fields using `SortByItem` objects:
+
+```json
+"listSortBy": [
+  { "property": "createdAt", "order": "desc" },
+  { "property": "name", "order": "asc" }
+]
+```
+
+Records are ordered according to the given sequence. Sorting is applied at the database query level.
+
+---
+
+#### **Grouping**
+
+Grouping organizes the returned records by a common field, such as category or project:
+
+```json
+"listGroupBy": ["categoryId"]
+```
+
+If omitted, all results are returned as a flat list.
+
+---
+
+#### **Query Cache**
+
+When `queryCache` is `true`, Mindbricks stores query results temporarily in cache memory to speed up subsequent identical queries.
+Caching follows standard invalidation rules to keep data consistent with the database.
+
+---
+
+#### **Set As Read**
+
+This option lets you automatically modify fields after fetching a list. For example:
+
+```json
+"setAsRead": [
+  { "name": "isRead", "value": "true" }
+]
+```
+
+This operation is often used for marking notifications or messages as viewed.
+
+---
+
+#### **Permission Filters**
+
+Permission filters ensure the user only receives records they are **explicitly permitted** to access.
+When a `ListPermissionFilter` is defined, Mindbricks performs the following steps before executing the query:
+
+1. Collects all **object IDs** on which the user (or their roles) has the specified permission.
+
+2. Builds an **allowed ID list** (positive or negative depending on permission semantics).
+
+3. Appends this ID list to the list query, so the database query only includes those records.
+
+Example:
+
+```json
+"permissionFilters": [
+  {
+    "name": "canViewProjects",
+    "permission": "viewProject",
+    "condition": "this.session.role != 'superAdmin'"
+  }
+]
+```
+
+| Field          | Description                                                              |
+| -------------- | ------------------------------------------------------------------------ |
+| **name**       | Identifier for internal or documentation purposes.                       |
+| **permission** | The permission name for which allowed object IDs are resolved.           |
+| **condition**  | Optional MScript expression to skip the filter (e.g., exempting admins). |
+
+---
+
+#### **Membership Filters**
+
+Membership filters restrict the result set to only those objects in which the user is a **member**.
+Mindbricks automatically resolves memberships and prepares an **allowed ID list** for the query.
+
+Example:
+
+```json
+"membershipFilters": [
+  {
+    "name": "OrganizationMembership",
+    "dataObjectName": "Organization",
+    "objectKeyIdField": "organizationId",
+    "userKey": "this.session.userId"
+  }
+]
+```
+
+In this configuration:
+
+1. The system collects all organizations where the user (defined by `userKey`) is a member.
+
+2. Creates an **ID list** of allowed organizations.
+
+3. Adds that ID list as part of the main query, limiting the result set to only those records.
+
+| Field                | Description                                                                                     |
+| -------------------- | ----------------------------------------------------------------------------------------------- |
+| **dataObjectName**   | The related object whose membership rules should apply. Defaults to the main Data Object.       |
+| **objectKeyIdField** | Field in the list item representing the related object (e.g., `organizationId` or `projectId`). |
+| **userKey**          | MScript expression returning the user’s ID. Typically `this.session.userId`.                    |
+| **checkFor**         | Optional MScript expression for validating specific membership roles or states.                 |
+| **condition**        | Optional expression that, if `false`, skips this filter (e.g., bypass for platform admins).     |
+
+When multiple membership filters are defined, Mindbricks combines them with **OR** logic — meaning a record is included if the user matches *any* of the memberships.
+
+---
+
+### **Pagination Options**
+
+The **Pagination Options** define how list results are segmented into pages and delivered in portions for performance and usability.
+
+```json
+"PaginationOptions": {
+  "paginationEnabled": true,
+  "defaultPageRowCount": 50
+}
+```
+
+| Field                   | Description                                                          |
+| ----------------------- | -------------------------------------------------------------------- |
+| **paginationEnabled**   | Enables pagination. When `false`, the entire result set is returned. |
+| **defaultPageRowCount** | Sets the default number of records returned per page.                |
+
+#### **Behavior**
+
+- Pagination parameters (`page`, `pageSize`, or `cursor`) are read from the **query parameters** of the request.
+
+- Mindbricks automatically applies offset and limit values to the query.
+
+- If pagination is disabled, all matching records are fetched at once — which should only be done for small datasets.
+
+---
+
+### **Example – List API with Permissions and Pagination**
+
+```json
+"listOptions": {
+  "listSortBy": [{ "property": "createdAt", "order": "desc" }],
+  "permissionFilters": [
+    { "name": "canViewProjects", "permission": "viewProject" }
+  ],
+  "membershipFilters": [
+    {
+      "name": "OrganizationMembership",
+      "dataObjectName": "Organization",
+      "objectKeyIdField": "organizationId",
+      "userKey": "this.session.userId"
+    }
+  ]
+},
+"paginationOptions": {
+  "paginationEnabled": true,
+  "defaultPageRowCount": 100
+}
+```
+
+In this example:
+
+- The API lists only projects where the user has the **`viewProject`** permission **and** belongs to the related organization.
+
+- Results are sorted by `createdAt` descending and delivered in **pages of 100 records**.
+
+---
+
+Mindbricks’ **permission and membership filters** therefore work not as runtime conditions, but as **pre-resolved ID restrictions** — ensuring that the underlying query operates strictly on the set of allowed objects, making list APIs both **secure and efficient**.
+
+### **Conclusion**
+
+In this document, we explored how **Mindbricks Business APIs** are structured, configured, and connected to the platform’s architectural patterns.
+We have seen that every Business API acts as a **container of configuration and behavior**—defining not only its basic options, data connections, and authentication rules but also its CRUD-specific logic through **clauses** like `selectClause`, `dataClause`, `whereClause`, and the various type-specific option groups.
+
+With these configurations, an architect can design fully functional, secure, and high-performance APIs without writing custom code.
+However, the true power of a Mindbricks API comes from its **dynamic logic layer**, where **Actions** and **Workflows** transform a static definition into a living process.
+
+Actions—such as validations, permission checks, inter-service calls, Redis operations, or AI integrations—are inserted into the **workflow milestones** of an API.
+Together, they define *when* and *how* logic executes within the API lifecycle—from the moment a request starts to the point it sends its response.
+Workflows make this execution flow visible, configurable, and reusable, allowing the API to evolve from a simple CRUD interface into a complete **business logic pipeline**.
+
+Because the subject of **Actions and Workflows** forms an extensive and practical topic of its own, it will be covered in the next document:

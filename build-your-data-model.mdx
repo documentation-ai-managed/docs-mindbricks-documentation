@@ -1,0 +1,1293 @@
+---
+title: Designing Your Data Model In Mindbricks
+---
+## Introduction
+
+Data modeling is the foundation of every successful application in Mindbricks. At its core, a data model represents your business domain as structured, semantic entities that flow through your entire architecture. In Mindbricks, data models aren't just database schemas—they're intelligent patterns that define how information is stored, validated, accessed, and transformed across your microservices.
+
+### What is a Data Model in Mindbricks
+
+In the Mindbricks ecosystem, a data model is defined through `DataObject` patterns within your service definition. Each `DataObject` represents a distinct entity in your business domain—whether that's a User, Product, Order, or any other concept central to your application. These objects are defined semantically in your service JSON, following the Mindbricks Pattern Ontology (MPO). Human architects can create and modify these data models through the visual design interface, while AI agents can work directly with the JSON representation—both approaches produce the same structured outcome.
+
+Unlike traditional database schemas, Mindbricks data models carry rich semantic meaning. They don't just define fields and types; they encapsulate business rules, relationships, validation logic, and access patterns. This semantic richness allows both human architects and AI agents to understand the intent and purpose behind each data entity.
+
+### The role of MPO in data modeling
+
+The Mindbricks Pattern Ontology (MPO) provides a structured framework for defining data models that are both human-readable and machine-processable. Within the MPO, `DataObject` patterns follow specific conventions that ensure consistency, maintainability, and scalability.
+
+While the underlying structure is represented as JSON, human architects interact with these models through an intuitive visual design interface. This UI representation translates complex JSON structures into forms, diagrams, and interactive editors—making data modeling accessible without requiring deep JSON expertise. Any JSON path referenced in documentation also corresponds to a specific menu path or form field in the UI, allowing seamless navigation between documentation and the design interface.
+
+When you define a data model using MPO patterns, you're creating more than just a database table—you're establishing:
+
+- A semantic blueprint for your business entities
+
+- A validation framework that ensures data integrity
+
+- A foundation for API routes and access controls
+
+- A source of truth for cross-service communication
+
+- A component that Genesis can compile into production-ready code
+
+The MPO approach eliminates ambiguity in your data definitions. Each property, relationship, and validation rule is explicitly defined in a structured format that both humans and AI can understand and manipulate. This structure helps prevent errors that might occur with manual JSON editing, as the UI guides users through valid options and configurations while providing immediate validation feedback.
+
+### How data models form the foundation for services and APIs
+
+In Mindbricks, data models serve as the cornerstone upon which your entire service architecture is built:
+
+1. **Service Structure**: Each microservice typically centers around one or more related `DataObject` patterns that define its domain responsibility.
+
+2. **API Generation**: Your data models directly inform the shape of your API. The properties you define and the relationships you establish become the backbone of your service's interface.
+
+3. **Validation Layer**: The constraints and rules you define at the data model level automatically translate into validation logic throughout your application.
+
+4. **Business Logic**: Custom behaviors, computed properties, and data transformations start at the model level before extending into routes and controllers.
+
+5. **Cross-Service Communication**: Data models define the contracts for how information flows between services, ensuring consistent data handling across your architecture.
+
+By investing time in thoughtful data modeling, you create a solid foundation that simplifies downstream development. Well-designed data models lead to intuitive APIs, consistent validation, clear business logic, and scalable services. They enable both human developers and AI agents to collaborate effectively by providing a shared understanding of your application's domain.
+
+In the following sections, we'll explore how to create, structure, and optimize your data models within the Mindbricks framework—starting with the basic concepts and progressing to advanced modeling techniques that leverage the full power of the MPO.
+
+## Core Concepts
+
+The foundation of data modeling in Mindbricks centers around a set of key concepts that define how data is structured, validated, and related. Understanding these core elements will provide you with the necessary framework to build robust data models for your applications.
+
+### Understanding DataObjects
+
+A `DataObject` in Mindbricks is defined according to the MPO as an object with `objectSettings`, a list of `properties`. Here is a minimal MPO-compliant example:
+
+```json
+{
+  "objectSettings": {
+    "basicSettings": {
+      "name": "product",
+      "description": "Represents a product in the catalog.",
+      "useSoftDelete": true
+    },
+    "authorization": {
+      "objectDataIsPublic": false,
+      "objectDataIsInTenantLevel": false
+    }
+  },
+  "properties": [
+    // DataProperty objects go here
+  ]
+}
+```
+
+In the UI, you create a new DataObject by navigating to your service definition and selecting "Add Data Object". Each DataObject requires:
+
+- A unique name (lower camelCase, e.g., `product`)
+
+- A description
+
+- A set of properties (see below)
+
+- Optional settings for authorization, caching, and more
+
+### Properties and Types
+
+Each property in a DataObject is a `DataProperty` object, which includes `basicSettings` and other optional settings. Here is an MPO-compliant property example:
+
+```json
+{
+  "basicSettings": {
+    "name": "price",
+    "type": "Double",
+    "isArray": false,
+    "definition": "The retail price of the product.",
+    "isRequired": true,
+    "allowUpdate": true,
+    "requiredInUpdate": false,
+    "allowAutoUpdate": false,
+    "autoIncrement": false,
+    "hashed": false,
+    "defaultValues": {
+      "default": 0.0,
+      "defaultInUpdate": 0.0,
+      "alwaysCreateWithDeafultValue": false
+    }
+  },
+  "indexSettings": {
+    "indexedInDb": true,
+    "unique": false
+  }
+}
+```
+
+The `type` field must use a value from the MPO `DataTypes` enum, such as `String`, `Text`, `Integer`, `Boolean`, `Double`, `Date`, `Enum`, etc.
+
+### Relationships between Data Objects
+
+Relationships are defined using the `relationSettings` field in a property. For example, a foreign key to a `category` object:
+
+```json
+{
+  "basicSettings": {
+    "name": "categoryId",
+    "type": "ID",
+    "isArray": false,
+    "definition": "Reference to the product category.",
+    "isRequired": true,
+    "allowUpdate": true,
+    "requiredInUpdate": false,
+    "allowAutoUpdate": false,
+    "autoIncrement": false,
+    "hashed": false,
+    "defaultValues": {}
+  },
+  "relationSettings": {
+    "hasRelation": true,
+    "relationName": "category",
+    "relationTargetObject": { "name": "category" },
+    "relationTargetKey": "id",
+    "relationTargetIsParent": true,
+    "onDeleteAction": "setNull",
+    "relationIsRequired": true
+  }
+}
+```
+
+- **One-to-One**: Use a property with `hasRelation: true` and `isArray: false`.
+
+- **One-to-Many**: The related object has a property referencing the parent (e.g., many products reference one category).
+
+- **Many-to-Many**: Use a join object (e.g., `productTag` with `productId` and `tagId`).
+
+- **Self-Reference**: The `relationTargetObject` can be the same as the current object.
+
+In the UI, these relationships are visualized and can be created by linking objects together.
+
+### Data Validation Patterns
+
+Property-level validation in Mindbricks focuses on ensuring that each property is present (if required) and matches the specified data type. For example, you can enforce that a property is required and must be a string or integer:
+
+```json
+{
+  "basicSettings": {
+    "name": "email",
+    "type": "String",
+    "isArray": false,
+    "definition": "User's email address.",
+    "isRequired": true
+  }
+}
+```
+
+At the property level, validation is limited to:
+
+- **Nullability**: Whether the property is required (`isRequired: true`)
+
+- **Type Control**: The value must match the specified `type` from the MPO `DataTypes` enum
+
+For more complex validation—such as cross-field checks, business rules, or conditional logic—Mindbricks recommends implementing these in the route logic (e.g., using route validations or hooks). These advanced validation patterns will be covered in detail in the next document, "Building Your API with CRUD Routes."
+
+### The Data Object Lifecycle
+
+DataObjects in Mindbricks follow a lifecycle managed by the platform:
+
+1. **Creation**: Via a create API
+
+2. **Validation**: Enforced by property and object settings
+
+3. **Persistence**: Managed by the service's data model
+
+4. **Retrieval**: Via get API or list API
+
+5. **Update**: Via update API
+
+6. **Deletion**: Via delete API (soft or hard delete)
+
+---
+
+Understanding these core concepts provides the foundation for creating effective data models in Mindbricks. In the next section, we'll explore how to create your first data model using these principles.
+
+Great! You've already structured the introduction and core concepts very clearly. For the next section, here’s a refined continuation that explains the `basicSettings` section of a property in detail using the provided pattern reference:
+
+---
+
+## Configuring Property Basic Settings
+
+Each `DataObject` in Mindbricks is composed of properties, and every property starts with its `basicSettings` block. This section defines how the property behaves during creation, updates, validation, and API exposure.
+
+Here’s a real-world example and explanation for each field:
+
+```json
+{
+  "basicSettings": {
+    "name": "status",
+    "type": "String",
+    "isArray": false,
+    "definition": "The current status of the task (e.g., pending, done, archived).",
+    "isRequired": true,
+    "allowUpdate": true,
+    "requiredInUpdate": false,
+    "allowAutoUpdate": true,
+    "autoIncrement": false,
+    "hashed": false,
+    "defaultValues": {
+      "default": "pending",
+      "defaultInUpdate": "pending",
+      "alwaysCreateWithDeafultValue": false
+    }
+  }
+}
+```
+
+### 🔑 `name`
+
+A unique identifier for the property (e.g., `"status"`).
+Mindbricks reserves `id` as a built-in primary key, so avoid naming any property `id`.
+Use `camelCase`, no spaces or special characters.
+
+### 🧪 `type`
+
+Specifies the property's data type. Must be a valid value from `DataTypes` like `String`, `Integer`, `Boolean`, `Double`, `Date`, etc. This determines both validation and how the property is stored in the database.
+
+### 📚 `definition`
+
+Human-readable explanation of the property. This appears in autogenerated documentation and the UI. Use this field to describe what the property represents.
+
+### 📦 `isArray`
+
+Set to `true` if the property holds an array of values. For example, a `tags` field for a blog post might be a string array.
+
+### ✅ `isRequired`
+
+If `true`, this property must be included in create operations. Useful for fields like `email` or `title`.
+
+### ✍️ `allowUpdate`
+
+Controls whether this property can be modified after initial creation. Use `false` for immutable values like `createdAt`.
+
+### 🔁 `requiredInUpdate`
+
+Set to `true` if the property must always be present in update operations. Useful when consistency is critical, like updating `status` or `version`.
+
+### ♻️ `allowAutoUpdate`
+
+When `true`, this field is included by default in automatic update routes unless overridden.
+
+### 🔢 `autoIncrement`
+
+If `true`, Mindbricks auto-generates the value by incrementing the last known value. Suitable for custom numeric identifiers or sequence fields.
+
+### 🔐 `hashed`
+
+Set to `true` for sensitive fields like passwords. Mindbricks will hash the value before storing it, ensuring it's never saved in plaintext.
+
+---
+
+### ⚙️ Default Values (`defaultValues` block)
+
+Defines how the property behaves when not provided in requests.
+
+#### 🧾 `default`
+
+Used during create operations if the property is missing.
+Example: `status = "pending"`
+
+#### 🧾 `defaultInUpdate`
+
+Used in update operations if the property is required but not present.
+
+#### 🛡️ `alwaysCreateWithDeafultValue`
+
+If `true`, the default value will override any client-provided value during creation.
+Use this when certain properties must be system-controlled at creation time (e.g., `createdBy`, `status = "draft"` for unauthenticated users).
+
+### ⚠️ `allowAutoUpdate` — Controlling Update Behavior in Default Routes
+
+This setting controls whether a property is **included automatically in the update clause** of default update routes generated by Mindbricks.
+
+- If `true` *(default)*:
+  The property will be included in the auto-generated `updateDataClause`, allowing users to update it via standard update routes.
+
+- If `false`:
+  The property will be **excluded** from the auto-generated update parameters, and will not be modifiable unless you define a **custom update route** that explicitly includes it.
+
+#### 📌 Real-World Example: Restricting User Role Updates
+
+Let’s say you have a `User` data object with a `roleId` property.
+
+```json
+{
+  "name": "roleId",
+  "type": "String",
+  "isRequired": true,
+  "allowUpdate": true,
+  "allowAutoUpdate": false,
+  "defaultValues": {
+    "default": "standardUser",
+    "alwaysCreateWithDeafultValue": true
+  }
+}
+```
+
+#### 🔒 Scenario: Prevent Role Tampering
+
+When users self-register via a public route:
+
+- The `roleId` is set **automatically** to `"standardUser"` using the `default` value.
+
+- Because `alwaysCreateWithDeafultValue = true`, even if a user tries to inject `"admin"` as their role, **it will be overridden** with the default value.
+
+- Since `allowAutoUpdate = false`, they also **cannot modify&#x20;****`roleId`** through the default update route.
+
+Now let’s assume you want only administrators to promote or demote users.
+
+#### ✅ Secure Role Update via Custom Route
+
+You can define a secure custom update route like `updateUserRole` where you can arrange the dataclause settings as to update only the roleId and set the `roleSettings` as to check the `admin`role.
+
+This ensures that:
+
+- Only admins can call this route
+
+- The `roleId` can only be updated in this controlled context
+
+- Default routes remain secure and unprivileged users **cannot escalate** themselves
+
+`allowAutoUpdate = false` is a powerful control for **guarding sensitive fields** in default routes. It allows you to **segregate privileged operations** into custom, role-guarded flows, ensuring your system's behavior aligns with business rules and security expectations.
+
+---
+
+### 💡 UI Navigation Hint
+
+To configure basic settings of a property in the UI:
+
+## 🧩 Index Settings (`indexSettings`)
+
+Index settings define how a data property contributes to the performance and retrieval efficiency of your backend services across **databases, Elasticsearch, and Redis caching**. These settings allow you to fine-tune how the system indexes, retrieves, and reacts to data changes based on each property.
+
+```json
+"indexSettings": {
+  "indexedInElastic": true,
+  "indexedInDb": false,
+  "unique": false,
+  "clusterInRedis": false,
+  "cacheSelect": false,
+  "isSecondaryKey": false
+}
+```
+
+### 🔍 `indexedInElastic`
+
+- **Purpose**: Determines whether the property is indexed in the **Elasticsearch** layer.
+
+- **Implications**: When enabled, this property can be used in full-text search, filters, or aggregations in **DataViews** and MCMQ (aggregated query) scenarios.
+
+- **Best for**: Properties like `title`, `status`, `categoryId`, `tags`, or anything used in user-facing queries or analytics.
+
+- **Default**: `true`
+
+---
+
+### 🧬 `indexedInDb`
+
+- **Purpose**: Specifies whether the property should have a **native database index** in the relational engine (e.g., PostgreSQL).
+
+- **Implications**: Indexes speed up selection and filter operations in your queries but may slightly increase write overhead.
+
+- **Best for**: Filtered fields like `email`, `createdAt`, `roleId`, or frequently joined columns.
+
+- **Default**: `false`
+
+---
+
+### 🔑 `unique`
+
+- **Purpose**: Ensures the property’s value is **unique across all records** in the database.
+
+- **Implications**: Adds a **database-level uniqueness constraint**. Insert or update operations violating uniqueness will fail.
+
+- **Best for**: Properties like `email`, `username`, `slug`, `licenseKey`.
+
+- **Default**: `false`
+
+---
+
+### ♻️ `clusterInRedis`
+
+- **Purpose**: Marks the property as a key in **Redis cache clustering**, used to optimize **partial cache invalidation**.
+
+- **Implications**: When data changes, Redis can precisely clear or refresh cached views based on the cluster key.
+
+- **Best for**: Multi-tenant apps (`tenantId`), category/tag-based views (`categoryId`), or role/group updates.
+
+- **Default**: `false`
+
+---
+
+### 🔎 `cacheSelect`
+
+- **Purpose**: Enables **lookup by this property** in Redis-based entity caches.
+
+- **Implications**: Optimizes repeated selections or joins by caching results based on this field's value.
+
+- **Best for**: High-read fields like `userId`, `externalId`, `slug`, etc.
+
+- **Default**: `false`
+
+---
+
+### 🆔 `isSecondaryKey`
+
+- **Purpose**: Declares this property as a **secondary identifier** of the object, used in custom route designs or token-based access.
+
+- **Implications**: Improves internal handling for alternative lookup scenarios without replacing the primary key (`id`).
+
+- **Best for**: Tokens, API keys, slugs, shortened URLs, etc.
+
+- **Default**: `false`
+
+---
+
+### Summary
+
+| Setting            | Target Layer     | Purpose                                                |
+| ------------------ | ---------------- | ------------------------------------------------------ |
+| `indexedInElastic` | Elasticsearch    | Enables filtering and searching via DataViews and MCMQ |
+| `indexedInDb`      | PostgreSQL/Mongo | Accelerates SQL queries and filters                    |
+| `unique`           | Database         | Enforces uniqueness constraints at storage level       |
+| `clusterInRedis`   | Redis            | Enables efficient targeted cache invalidation          |
+| `cacheSelect`      | Redis            | Allows lookup via this field in cached entities        |
+| `isSecondaryKey`   | App Logic        | Declares a lookup alternative to `id`                  |
+
+---
+
+### 🧭 UI Navigation Hint
+
+To configure index settings for a property:
+
+1. Navigate to the **Service** module that contains your target data object.
+
+2. Open the **Data Objects** section and select the desired object.
+
+3. In the **Properties** list, click on the property you want to configure.
+
+4. Expand the **Index Settings** accordion/tab.
+
+5. Use the checkboxes to enable or disable options
+
+---
+
+### 🧩 Enum Settings
+
+Enum settings allow you to define a finite set of named values for a property when its type is set to `Enum`. This makes your data model more expressive and your APIs more readable—providing both the stored integer and the corresponding label in responses.
+
+```json
+"basicSettings": {
+  "name": "status",
+  "type": "Enum"
+},
+"enumSettings": {
+  "hasEnumOptions": true,
+  "enumOptions": ["pending", "approved", "rejected"]
+}
+```
+
+In this example, the enum values are stored in the database as `0`, `1`, or `2`, but API responses will return both:
+
+```json
+"status": {
+  "value": 1,
+  "label": "approved"
+}
+```
+
+#### Key Fields
+
+| Field            | Description                                                                                                                   |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `hasEnumOptions` | Enables enum interpretation for `Enum`-type fields. If `true`, the `enumOptions` will be used to label stored integer values. |
+| `enumOptions`    | An **ordered list** of string labels for the enum values. Index position maps directly to the stored integer.                 |
+
+#### 🧭 UI Navigation Hint
+
+To define enums for a property:
+
+- Go to the **Properties** tab of your DataObject
+
+- Select or create a property of type `Enum`
+
+- Expand the **Enum Settings** section
+
+- Enable **Has Enum Options**
+
+- Enter your list of named enum values (e.g., `["pending", "approved", "rejected"]`)
+
+#### 💡 Best Practices
+
+- Keep enum names lowercase or camelCase to avoid conflicts in frontend usage.
+
+- Always define `enumOptions` in the intended order of usage, as reordering them after deployment may break existing data.
+
+---
+
+### 🧩 Enum Settings
+
+Enum settings allow you to constrain a property to a fixed set of symbolic string values—ideal for defining states, roles, types, or categories. When a property’s type is set to `Enum`, these options provide both **validation and semantic structure** to your data model.
+
+Unlike typical enum implementations that store numeric indices, **Mindbricks stores enum values as strings** in the database. This avoids migration or compatibility issues when enum options are updated or reordered.
+
+```json
+"basicSettings": {
+  "name": "userType",
+  "type": "Enum"
+},
+"enumSettings": {
+  "hasEnumOptions": true,
+  "enumOptions": ["guest", "free", "premium", "admin"]
+}
+```
+
+#### Behavior in Runtime
+
+- The stored value is the selected string (e.g., `"premium"`).
+
+- The **index** of the selected enum (e.g., `2`) is exposed through an additional field in responses and scripts:
+  → `userType_idx: 2`
+  This allows developers to perform ordered logic such as range-based comparisons (`if userType_idx >= 2`).
+
+#### Example Output
+
+```json
+{
+  "userType": "premium",
+  "userType_idx": 2
+}
+```
+
+---
+
+#### 🔑 Key Fields
+
+| Field            | Description                                                                                                                                            |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `hasEnumOptions` | Enables enum validation and indexing. Must be `true` for `enumOptions` to apply.                                                                       |
+| `enumOptions`    | An ordered list of valid string values. Input is validated against this list. The index is computed from this order and provided via `<property>_idx`. |
+
+---
+
+#### 🧭 UI Navigation Hint
+
+To define enums for a property:
+
+- Go to the **Properties** tab of your DataObject
+
+- Select or create a property with type `Enum`
+
+- Expand the **Enum Settings** section
+
+- Enable **Has Enum Options**
+
+- Add your string options in the desired order
+
+---
+
+#### 💡 Best Practices
+
+- Store enums as meaningful strings (e.g., `"premium"`), not indices.
+
+- Use index fields like `userType_idx` in scripts or filters when logical order matters.
+
+- Avoid reordering enumOptions after deployment unless the change is fully coordinated, as it affects `_idx` values used in logic.
+
+---
+
+### 🔗 Relation Settings
+
+The `relationSettings` configuration in a `DataProperty` allows you to define semantic relationships between data objects. These relations are critical not only for database integrity, but also for shaping APIs, generating filters, enabling joins, and expressing meaningful business logic.
+
+Mindbricks supports the following core types of relationships:
+
+#### 1. **One-to-One**
+
+Define a relation without marking the target as a parent (`relationTargetIsParent: false`).
+This creates a reference-like behavior between two objects, where the source references exactly one target.
+
+#### 2. **One-to-Many**
+
+Set `relationTargetIsParent: true` in the property.
+This means **the current object is a child**, and the target object is the **parent** in a one-to-many hierarchy.
+
+#### 3. **Many-to-Many**
+
+Use a **join object** (an intermediate DataObject) that holds two one-to-many relations to the two participating objects.
+
+---
+
+### 🎓 Real World Example: Students and Courses
+
+Let’s model a university system with `student`, `course`, and `registeredCourse` data objects:
+
+---
+
+#### 🧑‍🎓 `student` DataObject
+
+Basic entity representing a student.
+
+#### 📚 `course` DataObject
+
+Represents a course in the system.
+
+#### 📝 `registeredCourse` DataObject
+
+Acts as the **join object**, capturing the many-to-many relationship:
+
+- One student can register to many courses
+
+- One course can have many students
+
+---
+
+### ✅ Step-by-Step Configuration
+
+#### `registeredCourse` ➡️ `student` relation (One-to-Many)
+
+```json
+{
+  "basicSettings": {
+    "name": "studentId",
+    "type": "ID"
+  },
+  "relationSettings": {
+    "hasRelation": true,
+    "relationName": "student",
+    "relationTargetObject": { "name": "student" },
+    "relationTargetKey": "id",
+    "relationTargetIsParent": true,
+    "onDeleteAction": "cascade",
+    "relationIsRequired": true
+  }
+}
+```
+
+#### `registeredCourse` ➡️ `course` relation (One-to-Many)
+
+```json
+{
+  "basicSettings": {
+    "name": "courseId",
+    "type": "ID"
+  },
+  "relationSettings": {
+    "hasRelation": true,
+    "relationName": "course",
+    "relationTargetObject": { "name": "course" },
+    "relationTargetKey": "id",
+    "relationTargetIsParent": true,
+    "onDeleteAction": "cascade",
+    "relationIsRequired": true
+  }
+}
+```
+
+---
+
+### 💡 Relationship Overview
+
+| Relation                        | Type         | Setup                                                 |
+| ------------------------------- | ------------ | ----------------------------------------------------- |
+| `student` ↔️ `registeredCourse` | One-to-Many  | `registeredCourse.studentId` with `isParent: true`    |
+| `course` ↔️ `registeredCourse`  | One-to-Many  | `registeredCourse.courseId` with `isParent: true`     |
+| `student` ↔️ `course`           | Many-to-Many | Achieved indirectly via `registeredCourse` join table |
+
+---
+
+### 🧭 UI Navigation Hint
+
+To configure a relation:
+
+1. Open the **Data Object** editor (e.g., `registeredCourse`)
+
+2. Add a property (e.g., `studentId`)
+
+3. Set type to `ID`
+
+4. Expand **Relation Settings**
+
+5. Enable `Has Relation`
+
+6. Set:
+
+   - **Target Object** (e.g., `student`)
+
+   - **Target Key** (`id`)
+
+   - **Relation Name** (`student`)
+
+   - Mark `Target is Parent` as `true` if this is a child-to-parent relation
+
+---
+
+### 🔐 Impact on System Behavior
+
+- Enables automatic foreign object fetches in APIs
+
+- Allows joining related objects in DataViews
+
+- Generates correct filters and form components in clients
+
+- Enforces referential integrity via deletion actions
+
+---
+
+## 🧾 Session Settings
+
+The `sessionSettings` section of a `DataProperty` allows you to **automatically populate a property using values from the active user session**, such as `userId`, `tenantId`, or `clientId`. These settings are essential for establishing **ownership**, enforcing **access boundaries**, and maintaining a **secure multi-tenant architecture** without requiring sensitive data to be passed explicitly from the client.
+
+---
+
+### ⚙️ Session-Driven Properties
+
+#### `isSessionData`
+
+When `true`, this property will be filled automatically using the session, during **create** and **update** operations.
+This prevents tampering, as the client cannot override the session-bound value.
+
+#### `sessionParam`
+
+Optionally specifies which key to use from the session (e.g., `"userId"`, `"tenantId"`).
+If left blank, the property name will be used by default.
+
+#### `isOwnerField`
+
+When `true`, this property identifies the **owner of the record**. Mindbricks uses this to automatically:
+
+- Restrict **get**, **update**, and **delete** operations to the owner.
+
+- Allow access for records only if the session matches the owner.
+
+Only one property per DataObject should be marked as the `isOwnerField`.
+
+---
+
+### ✅ Real-World Example: `task.userId` in a Todo App
+
+Imagine you're building a **personal todo application**. Each user creates and manages their own tasks, but should not see or modify tasks created by others.
+
+Here’s how to model this:
+
+```json
+{
+  "basicSettings": {
+    "name": "userId",
+    "type": "ID"
+  },
+  "sessionSettings": {
+    "isSessionData": true,
+    "configuration": {
+      "sessionParam": "userId",
+      "isOwnerField": true
+    }
+  }
+}
+```
+
+#### What This Does:
+
+- When a task is **created**, the `userId` is **automatically set** from the session. The client can’t override it.
+
+- When fetching or updating a task, Mindbricks **automatically enforces ownership** using this field.
+
+- This setup ensures that a user can only see, modify, or delete **their own tasks**.
+
+---
+
+### 🔐 Why This Matters
+
+- **Security**: Prevents users from injecting `userId` or `tenantId` values to gain access to someone else's data.
+
+- **Simplicity**: Reduces what the frontend needs to send—`userId` and similar values are managed entirely on the backend.
+
+- **Multi-tenancy**: Ensures tenant data separation without requiring custom logic.
+
+- **Ownership Enforcement**: You can declare ownership once and get automatic enforcement across any CRUD operation.
+
+---
+
+### 🧭 UI Navigation Hint
+
+To set session bindings for a field:
+
+1. Open the **Data Object** editor (e.g., `task`)
+
+2. Add a property (e.g., `userId`) and set its type to `ID`
+
+3. Open the **Session Settings** section
+
+4. Toggle **Session Data** = ✅
+
+5. Set **Session Param** = `"userId"` (optional)
+
+6. Toggle **Is Owner Field** = ✅
+
+### 🔐 Clarifying Ownership Enforcement
+
+Setting `isOwnerField: true` on a property **does not automatically enforce ownership checks** in all CRUD routes. Instead, it **semantically marks the field** as the property that stores the "owner" of the data (typically something like `userId` or `creatorId`).
+
+This has two important effects:
+
+1. **Semantic Meaning**:
+   Mindbricks understands that this property represents the owner of the record. This helps with AI-assisted design, documentation, and route-level behaviors.
+
+2. **Ownership Checks When Requested**:
+   If you configure a CRUD route to **perform an ownership check** (via access criteria, authorization rules, or MScript logic), Mindbricks will use the `isOwnerField` to **automatically apply the appropriate comparison**—matching the property against the current session (e.g., `userId === session.userId`).
+
+This **does not restrict** access by itself. But if you later define a route and enable **ownership-based access**, Mindbricks will know to enforce it **using this field**.
+
+### 🧭 UI Hint
+
+In the UI:
+
+- Marking a property as **Owner Field** will highlight it in route-level configurations
+
+- When defining a CRUD route, you can choose to **enforce owner access**, and the system will look for the property with `isOwnerField: true` to apply the logic
+
+---
+
+## 🧮 Formula Settings
+
+The `formulaSettings` section of a `DataProperty` in Mindbricks allows you to **compute a property's value dynamically using MScript** instead of requiring it from the client. This makes your data model smarter, more declarative, and safer by shifting logic into a centralized, predictable layer.
+
+---
+
+### ⚙️ isCalculated
+
+```json
+"isCalculated": true
+```
+
+- Set this to `true` when the property should be **calculated instead of submitted** in the request payload.
+
+- When enabled, Mindbricks will evaluate the formula to determine the value during creation or update.
+
+---
+
+### 🧾 formula
+
+```json
+"formula": "this.unitPrice * this.quantity"
+```
+
+- The primary MScript formula used during creation (and update, unless `updateFormula` is provided).
+
+- You can reference other input values using `this.{fieldName}`.
+
+- Session variables (e.g., `this.session.userId`) and fetch results are also accessible.
+
+```json
+"formula": "this.unitPrice * this.quantity"
+```
+
+---
+
+### 🔁 updateFormula *(Optional)*
+
+```json
+"updateFormula": "this.unitPrice * this.quantity"
+```
+
+- If provided, this is used **only during update** operations.
+
+- If omitted, the primary `formula` is used for both create and update.
+
+---
+
+### 🔄 calculateWhenInputHas *(Optional)*
+
+```json
+"calculateWhenInputHas": ["quantity", "unitPrice"]
+```
+
+- A list of field names. If any of these appear in the update request, the formula will be **re-evaluated**.
+
+- Ensures formulas are recalculated **only when needed**, avoiding performance issues or unintended overrides.
+
+---
+
+### 🕓 calculateAfterInstance *(Optional)*
+
+```json
+"calculateAfterInstance": true
+```
+
+- If `true`, the formula is calculated **after** the full data instance has been constructed.
+
+- Required when your formula depends on **computed fields**, **foreign fetches**, or **contextual values** not present in the raw input.
+
+---
+
+### ✅ Example
+
+A real-world example for `discountRate`:
+
+```json
+"formulaSettings": {
+  "isCalculated": true,
+  "formula": `
+    (this.customerType === "vip") ?  0.2
+    : ((this.customerType === "regular") ? 0.1 : 0)
+    : 0
+  `,
+  "calculateWhenInputHas": ["customerType"]
+}
+```
+
+---
+
+### 🧭 UI Navigation Hint
+
+In the UI:
+
+- Go to the DataObject → Fields section → Open the field's detail pane
+
+- Expand the **Formula Settings** section
+
+- Toggle **"Calculated Field"** to enable formula logic
+
+- Enter formulas using the embedded MScript editor
+
+---
+
+## 🔍 Filter Settings
+
+The `filterSettings` of a data property define whether and how it can be used to **filter records** in automatically generated `getList` API routes. These settings help architects control the public filtering interface exposed by each service.
+
+---
+
+### ✅ `isFilterParameter`
+
+```json
+"isFilterParameter": true
+```
+
+- Enables the property to be used as a **query parameter** in list endpoints like `/products/getList`.
+
+- If `true`, Mindbricks will automatically generate filtering logic based on the property’s type and indexing status.
+
+- If `false`, the property will be excluded from filterable fields.
+
+---
+
+### 🏷️ `filterName` (Optional)
+
+```json
+"filterName": "category"
+```
+
+- Overrides the query string parameter name used for filtering.
+
+- If not provided, the property’s name will be used by default.
+
+---
+
+### 🔧 Automatic Backend Handling
+
+When `isFilterParameter` is enabled, Mindbricks:
+
+- Adds the filter to the OpenAPI (Swagger) documentation
+
+- Validates and sanitizes the input
+
+- Applies it to the backend query based on the property type:
+
+  - **String** and **Text** → partial match (LIKE/ILIKE)
+
+  - **ID, Integer, Enum** → exact match
+
+  - **Boolean** → strict match
+
+  - **Date** → supports advanced operators like `min`, `max`, `range`
+
+- Uses existing **Elasticsearch** or **DB indexes** for performance (if defined in `indexSettings`)
+
+---
+
+### 📌 Real-World Example
+
+For a `Product` object:
+
+```json
+"filterSettings": {
+  "isFilterParameter": true,
+  "filterName": "category"
+}
+```
+
+Clients can now filter the list with:
+
+```
+GET /product/getList?category=shoes
+```
+
+And internally, this will map to filtering by the `categoryId` or `category` property in the object.
+
+---
+
+### 🧭 UI Navigation Hint
+
+To enable filtering for a field:
+
+1. Navigate to your service → Open the relevant DataObject
+
+2. Select the desired property
+
+3. Expand the **Filter Settings** section
+
+4. Toggle **“Enable as Filter”**
+
+5. Optionally customize the **Query Parameter Name**
+
+---
+
+## 🔄 Context Settings
+
+The `contextSettings` configuration allows you to assign a property’s value dynamically at runtime using values available in the **request context**. Unlike formulas that use an MScript expression, context-based values are **directly copied** from a named context property.
+
+This is especially useful for:
+
+- Assigning the result of a **fetch operation**
+
+- Using **data from AI inferences**, API lookups, or internal aggregations
+
+- Passing **computed or injected values** into the record without relying on client input
+
+---
+
+### ✅ `isContextData`
+
+```json
+"isContextData": true
+```
+
+- Enables the property to **auto-fill from the context**
+
+- Skips client-supplied values during create or update
+
+- Ensures this property always reflects the **runtime-computed value**
+
+---
+
+### 🔑 `contextParam`
+
+```json
+"contextParam": "company.name"
+```
+
+- Points to the **exact key in the runtime context** from which the property will draw its value
+
+- Supports **dot notation** for nested values
+
+- Works with data populated by:
+
+  - `fetchForeigns`, `apiFetches`, `interserviceCalls`
+
+  - Shared `context` values like `this.session`, `this.stats`, or `this.company`
+
+```json
+"contextSettings": {
+  "isContextData": true,
+  "contextParam": "company.name"
+}
+```
+
+---
+
+### 🔍 Real-World Example
+
+Suppose you’re creating a `JobApplication` object, and you want to capture the **positionTitle** from a related fetch:
+
+1. You define a fetch named `position` that retrieves the position object
+
+2. It’s stored in context as `this.position`
+
+3. You map the field:
+
+```json
+"contextSettings": {
+  "isContextData": true,
+  "contextParam": "position.title"
+}
+```
+
+This ensures the application record always includes the correct position title, **regardless of what the client sends**.
+
+---
+
+### 🧭 UI Navigation Hint
+
+To map a property from context:
+
+1. Open the **DataObject**
+
+2. Select the desired **property**
+
+3. Expand the **Context Settings** section
+
+4. Enable **“Fill from Context”**
+
+5. Specify the **context path**, like `company.name` or `stats.salesCount`
+
+---
+
+## 🔗 Static Join Settings
+
+Mindbricks supports **static joins** to populate a property by fetching data from a related object at the time of **creation** or **update**. This pattern is especially useful when you need to **denormalize** frequently queried data into the current object, avoiding runtime joins and improving query performance.
+
+---
+
+### ⚙️ `isStaticJoin`
+
+```json
+"isStaticJoin": true
+```
+
+- Enables static join behavior
+
+- The value for this property is **copied from another object** at create/update time
+
+- Client-supplied values for this property are ignored unless the join fails
+
+---
+
+### 🧭 How It Works
+
+When enabled, Mindbricks:
+
+1. Reads the **foreign key** value from the current object
+
+2. Fetches the matching record from the **source object**
+
+3. Reads the target field (`jointRead`) from that record
+
+4. Assigns it to the current property
+
+---
+
+### 📌 Configuration Fields
+
+| Field             | Purpose                                                                                              |
+| ----------------- | ---------------------------------------------------------------------------------------------------- |
+| `jointSource`     | Name of the source DataObject (e.g. `"company"` or `"company@billing"` if it's from another service) |
+| `jointRead`       | Name of the property to read from the source (default = this property’s name)                        |
+| `jointSourceKey`  | Key in the source used to identify the record (e.g., `"id"`)                                         |
+| `jointForeignKey` | Local property that acts as the foreign key (e.g., `"companyId"`)                                    |
+
+---
+
+### 🧠 Real-World Example
+
+Let’s say you have:
+
+- A `Customer` object with a `companyId`
+
+- A `Company` object that has a `cityId`
+
+You want to **store the cityId directly** in the `Customer` object to support geo-based filtering or reporting—**without a runtime join**.
+
+In the `Customer` object, you define a new property `cityId` like this:
+
+```json
+"staticJoinSettings": {
+  "isStaticJoin": true,
+  "jointSource": "company",
+  "jointRead": "cityId",
+  "jointSourceKey": "id",
+  "jointForeignKey": "companyId"
+}
+```
+
+At runtime, when a customer is created or updated:
+
+- Mindbricks uses `companyId` from the input
+
+- Fetches the company with `id = companyId`
+
+- Copies its `cityId` into the customer's `cityId`
+
+This lets you query customers directly by city without any join logic.
+
+---
+
+### ✅ Use Cases
+
+- Propagate `tenantId` or `clientId` from related objects
+
+- Copy status labels (e.g., `userStatusName`) from foreign definitions
+
+- Inject static foreign data into objects for **performance or audit** reasons
+
+---
+
+### ⚠️ Cautions
+
+- If the joined value in the source object **changes later**, it won’t be reflected in existing records unless updated manually or through a maintenance job
+
+- Use static joins only for **values that don’t change frequently**
+
+---
+
+### 🧭 UI Navigation Hint
+
+To configure a static join:
+
+1. Go to the **Data Object** > **Property**
+
+2. Expand the **Static Join Settings** section
+
+3. Enable **"Use Static Join"**
+
+4. Set:
+
+   - **Source Object Name** (e.g., `"company"`)
+
+   - **Read Field** (e.g., `"cityId"`)
+
+   - **Source Key** (typically `"id"`)
+
+   - **Foreign Key in This Object** (e.g., `"companyId"`)
+
+---
+
+Certainly! Here's a concise and well-aligned summary section to close out your **DataObject** documentation and transition smoothly into the upcoming CRUD Routes document:
+
+---
+
+## 📦 Wrapping Up: From Data Models to APIs
+
+In Mindbricks, defining a robust **DataObject** is much more than just modeling a database table—it’s about declaring the **semantic contract** of your domain. You've now explored how properties are configured, validated, related, enriched, and controlled using a broad set of declarative patterns:
+
+- **Basic Settings** establish the identity and mutability of each field.
+
+- **Indexing**, **session bindings**, **contextual inputs**, and **calculated formulas** shape how data is stored, retrieved, and manipulated.
+
+- **Relations**, **static joins**, and **enum settings** make your model both expressive and optimized for service-to-service communication.
+
+- **Validation**, **ownership rules**, and **default behaviors** ensure data consistency and secure access across the application.
+
+Each DataObject becomes the **center of gravity** for its service—governing how data flows, how users interact with it, and how the system scales.
+
+But defining the data model is just the beginning.
+
+---
+
+## 🧩 What Comes Next: Connecting with Business API's
+
+Every DataObject is meant to be interacted with. In Mindbricks, those interactions are defined through **BusinesApi** patterns—high-level, declarative route definitions that generate fully functional REST APIs, complete with access control, validation, side effects, and response shaping.
+
+In the next guide, [**Building Your API in Mindbricks**](), you’ll learn:
+
+- How to define api's like `create`, `update`, `get`, `delete`, and `getList`
+
+- How to attach validation, ownership checks, hooks, and filters
+
+- How to extend behavior with fetches, aggregations, and calculated responses
+
+By combining powerful **DataObjects** with intelligent **BusinessApi** definitions, you create services that are secure, testable, scalable—and entirely defined through pattern logic.
+
+👉 Ready to turn your models into a working API? Continue with:
+📘 [**Building Your API in Mindbricks**]()

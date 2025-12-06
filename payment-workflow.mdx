@@ -1,0 +1,1107 @@
+---
+title: Add Payment Workflows To Your Application
+---
+## **Overview**
+
+Mindbricks can handle payment flows as ordinary business logic using the business api actions with the payment gateway provider integrations, however since payment is a compplicated flow which should be executed in a seamless cooperation of backend and frontend, Mindbricks provides native automatic integration with Stripe payment gateway.
+
+In its roadmap, Mindbricks have strict plant to include automatic integrations for other common gateways, this feature is restricted with Stripe at the moment.
+
+In this document, all aspects of payment logic will be explained. This document is a guide for
+
+- Mindbricks architects por AI agents that devolopes payment based applications in Mindbricks
+
+- Software architects that develope their own services that will interact with Mindbricks services
+
+- Frontend/mobile application developers or AI agents that build frontend for the Mindbricks built payment application.
+
+## Single task for having a payment feature in your application
+
+To be able to integrate Stripe payment to your application, there is only one single task for the architect or AI agent to do. Define your "order" data object and set it's Stripe settings. Assuming you alrady have a Stripe account with your test and live keys, there are no more tasks to do in Mindbricks, just joining your order data object with Stripe feature.
+
+## What is the Order Data Object
+
+A payment in an application is done for a reason, user purchased some items or some services. This purchase also debits the user and the payment is done for this debit. So Mindbricks needs only this data object to start and manage the Stripe payment flow.
+
+There may be more than one data objects that represent user debit in the application, for example in an online store application, user may buy add some items to the basket and checkout them, but also in the same application user may have another oppurtunity to buy a prime subscription for extra favors. So these two trades may have different nature and the architect may build seperate busnes logic for them. So in the application tehre may be to order type data objects, one mayhave a name like `order`while the other may have a name `userSubscription`. Both data objects will represent some amount of money to charge user. But in practice most applications have one business logic for user payment, if you think that you need more than one payment logics, first try to combine them in one data object is possible.
+
+Airbnb like applications may have a `reservation` data object,
+Uber like applications may have a `ride` data object,
+Amazon like applications may have a `order` data object,
+Ticketmaster like applications may have a `ticket`data object
+
+All these data objects may be considered as an order type data object nad can be joined to Stripe in Mindbricks.
+
+An order data object mostly sourced by another data object, like a `property` sources a `reservation`, like a `car` sources a ride, like a `product` sources an `order`, like an `event` sources a `ticket`.
+
+So make your design smart to create an order data object instance that has its values aligned with its source data object instance.
+
+An order type data object in Mindbricks should have following properties,
+
+- a property to represent the id of the order in the payment flow, it may be data object's ID property or you may want to use an extra unique property for a more human readable string ID.
+
+- a property to reprsent the user who is debited,
+
+- a property to represent the amount / or a relation logic to collect the amount
+
+- a property to represent the currency, or a hardcoded settin may overcome it
+
+- a property to represent the status of the order, may have any enum values, Mindbricks will update it just for the payment business logic
+
+- a property to represent the date of the status change
+
+## Understandign StripeOrder pattern
+
+Once you designed your order type data object, now you can configure its `Stripe Order` settings in the `Object Settings`chapter of the Data Object.
+
+The `StripeOrder` pattern defines the settings for integrating this data object with Stripe to handle e-commerce orders and payments. When enabled, Mindbricks automatically generates the required logic and auxiliary objects for managing payment workflows. *Ensure Stripe credentials are set at the project level to activate this integration.*
+
+```json
+
+  "ObjectSettings": {
+    "basicSettings": "ObjectBasicSettings",
+    "authorization": "ObjectAuthorization",
+    "redisEntityCacheSettings": "RedisEntityCacheSettings",
+    "compositeIndexSettings": ["CompositeIndex"],
+
+    "stripeOrder": "StripeOrder"
+
+  },
+
+  "StripeOrder": {
+    "objectIsAnOrderObject": "Boolean",
+    "configuration": "StripeOrderConfig"
+  },
+
+  "StripeOrderConfig": {
+    "orderName": "String",
+    "orderId": "MScript",
+    "amount": "MScript",
+    "currency": "MScript",
+    "description": "MScript",
+    "orderStatusProperty": "PropRefer",
+    "orderStatusUpdateDateProperty": "PropRefer",
+    "orderOwnerIdProperty": "PropRefer",
+    "mapPaymentResultToOrderStatus": "PaymentResultMap"
+  },
+
+  "PaymentResultMap": {
+    "paymentResultStarted": "MScript",
+    "paymentResultCanceled": "MScript",
+    "paymentResultFailed": "MScript",
+    "paymentResultSuccess": "MScript"
+  },
+```
+
+To configure the `stripeOrder` pattern in the `objectSettings` consider following points.
+
+`orderName`: The name of the order as it will appear in Stripe and internal records. It may be `"XBooksOrder"`, `"PBikesRide"` or `"ParisConcertsTicket`.
+
+Following pattern properties are MScript values that will be eveluated in the context. In these MScripts you can reach your order object like , `this.order`or `this.reservation`etc.
+
+`orderId`: MScript expression to extract the order's unique identifier. Typically the ID field like , `this.reservation.id`.
+`amount`:MScript expression to determine the order amount for payment. Typically the amount field like , `this.reservation.amount` or may be a calculation like `this.reservation.rentPrice + this.reservation.taxAmount`.
+`currency`: MScript expression to determine the currency for the order. Typically an hardcoded string like `"USD"` or an expression like `this.order.currency`.
+`description`: MScript expression for the order description, shown in Stripe and receipts. Typically a template string like ``javascript `Reservation fee for PublicHouse application, your card is charged for ${this.reservation.amount} USD`. ``
+
+Following pattern properties should be directly the related proeprty names of your order data object.
+
+`orderStatusProperty`: The field name in the data object that holds the current order status. This will be automatically updated based on payment results.
+`orderStatusUpdateDateProperty`: The field name that records the timestamp of the last order status update. This is auto-managed during payment events.
+`orderOwnerIdProperty`: The field that holds the ID of the user who owns the order. This is used to ensure correct access control in payment flows.
+
+Following pattern properties are used to map literal payment status values to your own status values of your order life cycle logic.
+
+paymentResultStarted: `"pending"`,
+paymentResultCanceled: `"paymentError"`,
+paymentResultFailed: `"paymentError"`,
+paymentResultSuccess: `"paid"`
+
+In addtion to the `orderStatusProperty`of your own logic, Mindbricks automatically adds a system field to your order data object that manages the status of the payment in with system wording. You can always read this property from your data object instance once the instance is created.
+
+`_paymentConfirmation`: An enum property to represent the current payment status that is reported from Stripe.
+It can have values of `["pending", "processing", "paid", "canceled"]`.
+
+## System Data Objects For Stripe Order Pattern
+
+There are three system data objects created to manage the payment business logic of your application. These data objects are created in the same service that your stripe order data object is created.
+
+Please note that, you dont have to create any data objects for the payment specific logic, you just create your order data object and configure its StripeOrder pattern. All other data objects and apis will be created automatically by Mindbricks.
+
+### The Payment Data Object
+
+The payment data object is a system asset to store the payment tickets of the payment flow. It is like log table to store all payment information. The payment data object is named as `sys_${orderObjectName}Payment`, eg. if your order object name is reservation the payment data object name will be `sys_reservationPayment`. The system payment will be created for each order data object if your service have got more than one.
+
+The system payment data object will have following properties.
+
+| Property        | Type   | Required | Description                                                                                                                                                 |
+| --------------- | ------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ownerId`       | ID     | No       | An ID value to represent owner user who created the order                                                                                                   |
+| `orderId`       | ID     | Yes      | an ID value to represent the orderId which is the ID parameter of the source order object                                                                   |
+| `paymentId`     | String | Yes      | A String value to represent the paymentId which is generated on the Stripe gateway. This id is same as paymentIntentId of Stripe                            |
+| `paymentStatus` | String | Yes      | A string value to represent the payment status which belongs to the lifecyle of a Stripe payment. The enum values belong to Stripe librarry.                |
+| `statusLiteral` | String | Yes      | A string value to represent the logical payment status which belongs to the application lifecycle itself. The enum values belong to Mindbricks.             |
+| `redirectUrl`   | String | No       | A string value to represent return page of the frontend to show the result of the payment, this is used when the callback is made to server not the client. |
+
+### The Payment Customer Object
+
+The payment customer object is used to store the user (customer) values that are defined in Stripe side. It's name is always `sys_PaymentCustomer` and it is only created once in the service though you will have more than one payment flows.
+
+The payment customer data object will have following properties.
+
+| Property     | Type   | Required | Description                                                                                                                                                                 |
+| ------------ | ------ | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `userId`     | ID     | No       | An ID value to represent the user who is created as a stripe customer                                                                                                       |
+| `customerId` | String | Yes      | A string value to represent the customer id which is generated on the Stripe gateway. This id is used to represent the customer in the Stripe gateway                       |
+| `platform`   | String | Yes      | A String value to represent payment platform which is used to make the payment. It is stripe as default. It will be used to distinguish the payment gateways in the future. |
+
+### The Payment Method Object
+
+The payemtn method object is used to store the credit card information of the users. It's name is always `sys_PaymentMethod` and it is only created once in the service though you will have more than one payment flows. Note that this data object doesnt store any secure information of the credit card. It is used to reference the selected payment method on Stripe side.
+
+The payment method data object will have following properties.
+
+| Property          | Type   | Required | Description                                                                                                                                                               |
+| ----------------- | ------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `paymentMethodId` | String | Yes      | A string value to represent the id of the payment method on the payment platform.                                                                                         |
+| `userId`          | ID     | Yes      | An ID value to represent the user who owns the payment method. The userId belongs to Mindbricks side.                                                                     |
+| `customerId`      | String | Yes      | A string value to represent the customer id which is generated on the payment gateway. It belongs to the Stripe platform.                                                 |
+| `cardHolderName`  | String | No       | A string value to represent the name of the card holder. It can be different than the registered customer.                                                                |
+| `cardHolderZip`   | String | No       | A string value to represent the zip code of the card holder. It is used for address verification in specific countries.                                                   |
+| `platform`        | String | Yes      | A String value to represent payment platform which the paymentMethod belongs. It is stripe as default. It will be used to distinguesh the payment gateways in the future. |
+| `cardInfo`        | Object | Yes      | A Json value to store the card details of the payment method.                                                                                                             |
+
+The `cardInfo` in stripe platform is as follows. Note that Mindbricks doesnt know any secure value of a card.
+
+```json
+    "cardInfo": {
+      "brand": "visa",
+      "last4": "4242",
+      "funding": "credit",
+      "exp_month": 11,
+      "exp_year": 2033
+    }
+```
+
+### System Business API For Stripe Order Pattern
+
+There are some API's that are created automatically as business API arround system payment objects and your order object.
+The most important one is start payment API, named like `startTicketPayment`.
+You also have business API, to manage the system data objects, like listing payments. These API's are all detailed in the documentation of your application.
+You will see the usage and purpose of these API's in the flow descriptions below.
+
+### System Helper API For Stripe Order Pattern
+
+Some API's are again created automatically as helper API and their behavioral pattern is different than a business API.
+These API's are used to create payment methods, to fetch order information etc. You will see the usage and purpose of these API's in the flow descriptions below.
+
+## Before Payment Flow Starts
+
+It is assumed that the frontend provides a **“Pay”** or **“Checkout”** button that initiates the payment flow. The following steps occur after the user clicks this button.\
+Note that an order data object instance must already exist to represent the order being paid, with its initial status set.
+
+Mindbricks uses the most common and modern Stripe pattern, the **Payment Intent** flow. A *PaymentIntent* represents the intent to collect payment for a given order (or any payable entity).\
+In the application, the **PaymentIntent** is created in the backend, while the **PaymentMethod** (the user’s stored card information) is created in the frontend.\
+Only the PaymentMethod ID and minimal metadata are stored in the backend for later reference.
+
+The frontend first requests the current user’s saved payment methods from the backend, displays them in a list, and provides UI options to **add or remove** payment methods.\
+The user must select a Payment Method before starting the payment flow.
+
+### Listing the Payment Methods for the User
+
+To list the payment methods of the currently logged-in user, call the following **system API** (unversioned):
+
+`GET /payment-methods/list`
+
+This endpoint requires no parameters and returns an array of payment methods belonging to the user — without any envelope.
+
+```javascript
+const response = await fetch("$serviceUrl/payment-methods/list", {
+  method: "GET",
+  headers: { "Content-Type": "application/json" },
+});
+```
+
+Example response:
+
+```json
+[
+  {
+    "id": "19a5fbfd-3c25-405b-a7f7-06f023f2ca01",
+    "paymentMethodId": "pm_1SQv9CP5uUv56Cse5BQ3nGW8",
+    "userId": "f7103b85-fcda-4dec-92c6-c336f71fd3a2",
+    "customerId": "cus_TNgWUw5QkmUPLa",
+    "cardHolderName": "John Doe",
+    "cardHolderZip": "34662",
+    "platform": "stripe",
+    "cardInfo": {
+      "brand": "visa",
+      "last4": "4242",
+      "checks": {
+        "cvc_check": "pass",
+        "address_postal_code_check": "pass"
+      },
+      "funding": "credit",
+      "exp_month": 11,
+      "exp_year": 2033
+    },
+    "isActive": true,
+    "createdAt": "2025-11-07T19:16:38.469Z",
+    "updatedAt": "2025-11-07T19:16:38.469Z",
+    "_owner": "f7103b85-fcda-4dec-92c6-c336f71fd3a2"
+  }
+]
+```
+
+In each payment method object, the following fields are useful for displaying to the user:
+
+```javascript
+for (const method of paymentMethods) {
+  const brand = method.cardInfo.brand; // use brand for displaying VISA/MASTERCARD icons
+  const paymentMethodId = method.paymentMethodId; // send this when initiating the payment flow
+  const cardHolderName = method.cardHolderName; // show in list
+  const number = `**** **** **** ${method.cardInfo.last4}`; // masked card number
+  const expDate = `${method.cardInfo.exp_month}/${method.cardInfo.exp_year}`; // expiry date
+  const id = method.id; // internal DB record ID, used for deletion
+  const customerId = method.customerId; // Stripe customer reference
+}
+```
+
+If the list is empty, prompt the user to **add a new payment method**.
+
+### Creating a Payment Method
+
+The payment page (or user profile page) should allow users to add a new payment method (credit card).
+Creating a Payment Method is a secure operation handled **entirely through Stripe.js** on the frontend — the backend never handles sensitive card data.
+After a card is successfully created, the backend only stores its reference (PaymentMethod ID) for reuse.
+
+Stripe provides multiple ways to collect card information, all through secure UI elements.
+Below is an example setup — refer to the latest Stripe documentation for alternative patterns.
+
+To initialize Stripe on the frontend, include your **public key**:
+
+```html
+<script src="https://js.stripe.com/v3/?advancedFraudSignals=false"></script>
+```
+
+```javascript
+const stripe = Stripe("pk_test_51POkqt4..................");
+const elements = stripe.elements();
+
+const cardNumberElement = elements.create("cardNumber", {
+  style: { base: { color: "#545454", fontSize: "16px" } },
+});
+cardNumberElement.mount("#card-number-element");
+
+const cardExpiryElement = elements.create("cardExpiry", {
+  style: { base: { color: "#545454", fontSize: "16px" } },
+});
+cardExpiryElement.mount("#card-expiry-element");
+
+const cardCvcElement = elements.create("cardCvc", {
+  style: { base: { color: "#545454", fontSize: "16px" } },
+});
+cardCvcElement.mount("#card-cvc-element");
+
+// Note: cardholder name and ZIP code are collected via non-Stripe inputs (not secure).
+```
+
+You can dynamically show the card brand while typing:
+
+```javascript
+cardNumberElement.on("change", (event) => {
+  const cardBrand = event.brand;
+  const cardNumberDiv = document.getElementById("card-number-element");
+  cardNumberDiv.style.backgroundImage = getBrandImageUrl(cardBrand);
+});
+```
+
+Once the user completes the card form, create the Payment Method on Stripe.
+Note that the expiry and CVC fields are securely handled by Stripe.js and are never readable from your code.
+
+```javascript
+const { paymentMethod, error } = await stripe.createPaymentMethod({
+  type: "card",
+  card: cardNumberElement,
+  billing_details: {
+    name: cardholderName.value,
+    address: { postal_code: cardholderZip.value },
+  },
+});
+```
+
+When a `paymentMethod` is successfully created, send its ID to your backend to attach it to the logged-in user’s account.
+
+Use the **system API** (unversioned):
+
+`POST /payment-methods/add`
+
+**Example:**
+
+```javascript
+const response = await fetch("$serviceUrl/payment-methods/add", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ paymentMethodId: paymentMethod.id }),
+});
+```
+
+When `addPaymentMethod` is called, the backend retrieves or creates the user’s Stripe Customer ID, attaches the Payment Method to that customer, and stores the reference in the local database for future use.
+
+Example response:
+
+```json
+{
+  "isActive": true,
+  "cardHolderName": "John Doe",
+  "userId": "f7103b85-fcda-4dec-92c6-c336f71fd3a2",
+  "customerId": "cus_TNgWUw5QkmUPLa",
+  "paymentMethodId": "pm_1SQw5aP5uUv56CseDGzT1dzP",
+  "platform": "stripe",
+  "cardHolderZip": "34662",
+  "cardInfo": {
+    "brand": "visa",
+    "last4": "4242",
+    "funding": "credit",
+    "exp_month": 11,
+    "exp_year": 2033
+  },
+  "id": "19a5ff70-4986-4760-8fc4-6b591bd6bbbf",
+  "createdAt": "2025-11-07T20:16:55.451Z",
+  "updatedAt": "2025-11-07T20:16:55.451Z"
+}
+```
+
+You can append this new entry directly to the UI list or refresh the list using the `listPaymentMethods` API.
+
+### Deleting a Payment Method
+
+To remove a saved payment method from the current user’s account, call the **system API** (unversioned):
+
+`DELETE /payment-methods/delete/:paymentMethodId`
+
+**Example:**
+
+```javascript
+await fetch(
+  `$serviceUrl/payment-methods/delete/${paymentMethodId}`,
+  {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+  }
+);
+```
+
+## Starting the Payment Flow in Backend — Creation and Confirmation of the PaymentIntent Object
+
+The payment flow is initiated in the backend through the `start${orderObjectName}Payment` API like `startTicketPayment`or `startOrderPayment`.\
+This API must be called with one of the user’s existing payment methods. Therefore, ensure that the frontend **forces the user to select a payment method** before initiating the payment.
+
+The `startPayment` API is a versioned **Business Logic API** and follows the same structure as other business APIs.
+
+In the application, the payment flow starts by creating a **Stripe PaymentIntent** and confirming it in a single step within the backend.\
+In a typical (“happy”) path, when the `startPayment` API is called, the response will include a successful or failed PaymentIntent result inside the `paymentResult` object, along with the order object.
+
+However, in certain edge cases—such as when 3D Secure (3DS) or other bank-level authentication is required—the confirmation step cannot complete immediately.\
+In such cases, control should return to a frontend page to allow the user to finish the process.\
+To enable this, a **`return_url`** must be provided during the PaymentIntent creation step.
+
+Although technically optional, it is **strongly recommended** to include a `return_url`.\
+This ensures that the frontend payment result page can display both successful and failed payments and complete flows that require user interaction.\
+The `return_url` must be a **frontend URL**.
+
+The `paymentUserParams` parameter of the `startPayment` API contains the data necessary to create the Stripe PaymentIntent.
+
+Call the API as follows:
+
+```javascript
+const response = await fetch(
+  `$serviceUrl/v1/starttickettayment/${orderId}`,
+  {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      paymentUserParams: {
+        paymentMethodId,
+        return_url: `${yourFrontendReturnUrl}`,
+      },
+    }),
+  }
+);
+```
+
+The API response will contain a `paymentResult` object.
+If an error occurs, it will begin with `{ "result": "ERR" }`.
+Otherwise, it will include the PaymentIntent information:
+
+```json
+{
+  "paymentResult": {
+    "success": true,
+    "paymentTicketId": "19a60f8f-eeff-43a2-9954-58b18839e1da",
+    "orderId": "19a60f84-56ee-40c4-b9c1-392f83877838",
+    "paymentId": "pi_3SR0UHP5uUv56Cse1kwQWCK8",
+    "paymentStatus": "succeeded",
+    "paymentIntentInfo": {
+      "paymentIntentId": "pi_3SR0UHP5uUv56Cse1kwQWCK8",
+      "clientSecret": "pi_3SR0UHP5uUv56Cse1kwQWCK8_secret_PTc3DriD0YU5Th4isBepvDWdg",
+      "publicKey": "pk_test_51POkqWP5uU",
+      "status": "succeeded"
+    },
+    "statusLiteral": "success",
+    "amount": 10,
+    "currency": "USD",
+    "description": "Your credit card is charged for babilOrder for 10",
+    "metadata": {
+      "order": "Purchase-Purchase-order",
+      "orderId": "19a60f84-56ee-40c4-b9c1-392f83877838",
+      "checkoutName": "babilOrder"
+    },
+    "paymentUserParams": {
+      "paymentMethodId": "pm_1SQw5aP5uUv56CseDGzT1dzP",
+      "return_url": "${yourFrontendReturnUrl}"
+    }
+  }
+}
+```
+
+An example `startPayment` api documentation is added in the Appendix of this document.
+
+## Analyzing the API Response
+
+After calling the `startPayment` API, the most common expected outcome is a confirmed and completed payment.
+However, several alternate cases should be handled on the frontend.
+
+### System Error Case
+
+The API may return a classic service-level error (unrelated to payment).
+Check the HTTP status code of the response. It should be `200` or `201`.
+Any `400`, `401`, `403`, or `404` indicates a system error.
+
+```json
+{
+  "result": "ERR",
+  "status": 404,
+  "message": "Record not found",
+  "date": "2025-11-08T00:57:54.820Z"
+}
+```
+
+**Handle system errors on the payment page** (show a retry option).
+Do not navigate to the result page.
+
+### Payment Error Case
+
+The API performs both database operations and the Stripe payment operation.
+If the payment fails but the service logic succeeds, the API may still return a `200 OK` status, with the failure recorded in the `paymentResult`.
+
+In this case, show an error message and allow the user to retry.
+
+```json
+{
+  "status": "OK",
+  "statusCode": "200",
+  "order": {
+    "id": "19a60f8f-eeff-43a2-9954-58b18839e1da",
+    "status": "failed",
+    // ...
+  },
+  "paymentResult": {
+    "result": "ERR",
+    "status": 500,
+    "message": "Stripe error message: Your card number is incorrect.",
+    "errCode": "invalid_number",
+    "date": "2025-11-08T00:57:54.820Z"
+  }
+}
+```
+
+**Payment errors should be handled on the payment page** (retry option).
+Do not go to the result page.
+
+---
+
+### Happy Case
+
+When both the service and payment result succeed, this is considered the *happy path*.
+In this case, use the main data object  and `paymentResult` objects in the response to display a success message to the user.
+
+`amount` and `description` values are included to help you show payment details on the result page.
+
+```json
+{
+  "status": "OK",
+  "statusCode": "200",
+  "order": {
+    "id": "19a60f8f-eeff-43a2-9954-58b18839e1da",
+    "status": "paid"
+  },
+  "paymentResult": {
+    "success": true,
+    "paymentStatus": "succeeded",
+    "paymentIntentInfo": {
+      "status": "succeeded"
+    },
+    "amount": 10,
+    "currency": "USD",
+    "description": "Your credit card is charged for babilOrder for 10"
+  }
+}
+```
+
+To verify success:
+
+```javascript
+if (paymentResult.paymentIntentInfo.status === "succeeded") {
+  // Redirect to result page
+}
+```
+
+**Handle the happy case in the result page** by sending the `orderId` and the payment intent secret.
+
+```javascript
+const orderId = new URLSearchParams(window.location.search).get("orderId");
+const url = new URL(`$yourResultPageUrl`, location.origin);
+url.searchParams.set("orderId", orderId);
+url.searchParams.set("payment_intent_client_secret", currentPaymentIntent.clientSecret);
+setTimeout(() => { window.location.href = url.toString(); }, 600);
+```
+
+---
+
+### Edge Cases
+
+Although `startPayment` is designed to handle both creation and confirmation in one step, Stripe may return an incomplete result if third-party authentication or redirect steps are required.
+
+You must handle these cases in **both the payment page and the result page**, because some next actions are available immediately, while others occur only after a redirect.
+
+If the `paymentIntentInfo.status` equals `"requires_action"`, handle it using Stripe.js as shown below:
+
+```javascript
+if (paymentResult.paymentIntentInfo.status === "requires_action") {
+  await runNextAction(
+    paymentResult.paymentIntentInfo.clientSecret,
+    paymentResult.paymentIntentInfo.publicKey
+  );
+}
+```
+
+Helper function:
+
+```javascript
+async function runNextAction(clientSecret, publicKey) {
+  const stripe = Stripe(publicKey);
+  const { error } = await stripe.handleNextAction({ clientSecret });
+  if (error) {
+    console.log("next_action error:", error);
+    showToast(error.code + ": " + error.message, "fa-circle-xmark text-red-500");
+    throw new Error(error.message);
+  }
+}
+```
+
+After handling the next action, re-fetch the PaymentIntent from Stripe, evaluate its status, show appropriate feedback, and navigate to the result page.
+
+```javascript
+const { paymentIntent } = await stripe.retrievePaymentIntent(clientSecret);
+
+if (paymentIntent.status === "succeeded") {
+  showToast("Payment successful!", "fa-circle-check text-green-500");
+} else if (paymentIntent.status === "processing") {
+  showToast("Payment is processing…", "fa-circle-info text-blue-500");
+} else if (paymentIntent.status === "requires_payment_method") {
+  showToast("Payment failed. Try another card.", "fa-circle-xmark text-red-500");
+}
+
+const orderId = new URLSearchParams(window.location.search).get("orderId");
+const url = new URL(`$yourResultPageUrl`, location.origin);
+url.searchParams.set("orderId", orderId);
+url.searchParams.set("payment_intent_client_secret", currentPaymentIntent.clientSecret);
+setTimeout(() => { window.location.href = url.toString(); }, 600);
+```
+
+---
+
+## The Result Page
+
+The payment result page should handle the following steps:
+
+1. Read `orderId` and `payment_intent_client_secret` from the query parameters.
+
+2. Retrieve the PaymentIntent from Stripe and check its status.
+
+3. If required, handle any `next_action` and re-fetch the PaymentIntent.
+
+4. If the status is `"succeeded"`, display a clear visual confirmation.
+
+5. Fetch the order instance from the backend to display any additional order or fulfillment details.
+
+Note that paymentIntent status only gives information about the Stripe side.
+The  order data object instance in the service should also ve updated to start the fulfillment.
+In most cases, the `startPayment` api updates the status of the order using the response of the paymentIntent confirmation,
+but as stated above in some cases this update can be done only when the webhook executes.
+So in teh result page always get the final payment status in the order data object.
+
+To ensure that service i
+To fetch the order data object instance, you van use the related api which is given before, and to ensure that the service is updated with the latest status read the `_paymentConfirmation` field of the order instance.
+
+```javascript
+if (order._paymentConfirmation == "canceled") {
+  // the payment is canceled, user can be informed that they should try again
+} if (order._paymentConfirmation == "paid") {
+  // service knows that payment is done, user can be informed that fullfillment started
+} else {
+  // it may be pending, processing
+  // Fetch the object again until a canceled or paid status
+}
+```
+
+## APPENDIX. Example API Documentation For Start Payment API
+
+## Business API Design Specification - `Start Orderpayment`
+
+A Business API is a set of logical actions centered around a main data object. These actions can range from simple CRUD operations to complex workflows that implement intricate business logic.
+
+While the term “API” traditionally refers to an interface that allows software systems to interact, in Mindbricks a Business API represents a broader concept. It encapsulates a business workflow around a data object, going beyond basic CRUD operations to include rich, internally coordinated actions that can be fully designed and customized.
+
+This document provides an in-depth explanation of the architectural design of the `startOrderPayment` Business API. It is intended to guide backend architects and developers in maintaining the current design. Additionally, frontend developers and frontend AI agents can use this document to understand how to properly consume this API on the client side.
+
+## Main Data Object and CRUD Operation
+
+The `startOrderPayment` Business API is designed to handle a `update` operation on the `Order` data object. This operation is performed under the specified conditions and may include additional, coordinated actions as part of the workflow.
+
+## API Description
+
+Start payment for order
+
+## API Options
+
+- **Auto Params** : `false`
+  Determines whether input parameters should be auto-generated from the schema of the associated data object. Set to `false` if you want to define all input parameters manually.
+
+- **Raise Api Event** : `true`
+  Indicates whether the Business API should emit an API-level event after successful execution. This is typically used for audit trails, analytics, or external integrations.
+  The event will be emitted to the `orderpayment-started` Kafka Topic Note that the DB-Level events for `create`, `update` and `delete` operations will always be raised for internal reasons.
+
+- **Active Check** : \`\`Controls how the system checks if a record is active (not soft-deleted or inactive). Uses the`ApiCheckOption` to determine whether this is checked during the query or after fetching the instance.
+
+- **Read From Entity Cache** : `false`
+  If enabled, the API will attempt to read the target object from the Redis entity cache before querying the database. This can improve performance for frequently accessed records.
+
+## API Controllers
+
+A Mindbricks Business API can be accessed through multiple interfaces, including REST, gRPC, WebSocket, Kafka, or Cron. The controllers listed below map the business workflow to a specific interface, enabling consistent interaction regardless of the communication channel.
+
+### REST Controller
+
+The `startOrderPayment` Business API includes a REST controller that can be triggered via the following route:
+
+`/v1/startorderpayment/:orderId`
+
+By sending a request to this route using the service API address, you can execute this Business API. Parameters can be provided in multiple HTTP locations, including the URL path, URL query, request body, and request headers. Detailed information about these parameters is provided in the **Parameters** section.
+
+### MCP Tool
+
+REST controllers also expose the Business API as a tool in the MCP, making it accessible to AI agents. This `startOrderPayment` Business API will be registered as a tool on the MCP server within the service binding.
+
+## API Parameters
+
+The `startOrderPayment` Business API has 2 parameters that must be sent from the controller. Note that all parameters, except session and Redis parameters, should be provided by the client.
+
+Business API parameters can be:
+
+- **Auto-generated by Mindbricks** — inferred from the CRUD type and the property definitions of the main data object when the `autoParameters` option is enabled.
+
+- **Custom parameters added by the architect** — these can supplement or override the auto-generated parameters.
+
+### Parameter Details
+
+| Name                | Type                                                                              | Required | Default | Location  | Data Path           |
+| ------------------- | --------------------------------------------------------------------------------- | -------- | ------- | --------- | ------------------- |
+|                     |                                                                                   |          |         |           |                     |
+| `orderId`           | `ID`                                                                              | `Yes`    | `-`     | `urlpath` | `orderId`           |
+| **Description:**    | This id paremeter is used to select the required data object that will be updated |          |         |           |                     |
+|                     |                                                                                   |          |         |           |                     |
+| `paymentUserParams` | `Object`                                                                          | `No`     | `-`     | `body`    | `paymentUserParams` |
+| **Description:**    | The user parameters that should be defined to start a stripe payment process      |          |         |           |                     |
+|                     |                                                                                   |          |         |           |                     |
+
+### Parameter Transformations
+
+Some parameters are post-processed using **transform scripts** after being read from the request but before validation or workflow execution. Only parameters with a `transform` script are listed below.
+
+*No parameters are transformed in this API.*
+
+## AUTH Configuration
+
+The **authentication and authorization configuration** defines the core access rules for the `startOrderPayment` Business API. These checks are applied **after parameter validation** and before executing the main business logic.
+
+While these settings cover the most common scenarios, more **fine-grained or conditional access control**—such as permissions based on object context, nested memberships, or custom workflows—should be implemented using explicit actions like `PermissionCheckAction`, `MembershipCheckAction`, or `ObjectPermissionCheckAction`.
+
+### Login Requirement
+
+This API **requires login** (`loginRequired = true`). Requests from non-logged-in users will return a **401 Unauthorized** error.
+Login is necessary **but not sufficient**, as additional role, permission, or other authorization checks may still apply.
+
+---
+
+### Ownership Checks
+
+---
+
+### Role and Permission Settings
+
+- **Absolute roles** (bypass all auth checks):\
+  Users with any of the following roles will bypass all authentication and authorization checks, including ownership, membership, and standard role/permission checks:\
+  `[superAdmin]`
+
+---
+
+## Where Clause
+
+Defines the criteria used to locate the target record(s) for the main operation. This is expressed as a query object and applies to `get`, `list`, `update`, and `delete` APIs. All API types except `list` are expected to affect a single record.
+
+*If nothing is configured for (get, update, delete) the id fields will be the select criteria.*
+
+**Select By**:
+A list of fields that must be matched exactly as part of the WHERE clause. This is not a filter — it is a required selection rule. In single-record APIs (`get`, `update`, `delete`), it defines how a unique record is located. In `list` APIs, it scopes the results to only entries matching the given values.
+Note that `selectBy` fields will be ignored if `fullWhereClause` is set.
+
+*The business api configuration has no&#x20;*``*&#x20;setting.*
+
+**Full Where Clause**
+An MScript query expression that overrides all default WHERE clause logic. Use this for fully customized queries.
+When `fullWhereClause` is set, `selectBy` is ignored, however additional selects will still be applied to final where clause.
+
+The business api configuration has no `fullWhereClause` setting.
+
+**Additional Clauses**
+A list of conditionally applied MScript query fragments. These clauses are appended only if their conditions evaluate to true. If no condition is set it will be applied to the where clause directly.
+
+The business api configuration has no additionalClauses setting.
+
+**Actual Where Clause**
+This where clause is built using whereClause configuration (if set) and default business logic.
+
+```javascript
+{
+  $and: [{ id: this.orderId }, { isActive: true }];
+}
+```
+
+## Data Clause
+
+Defines custom field-value assignments used to modify or augment the default payload for `create` and `update` operations. These settings override values derived from the session or parameters if explicitly provided.",
+Note that a default data clause is always prepared by Mindbricks using data property settings, however any property in the data clause can be override by Data Clause Settings.
+
+An update data clause populates all update-allowed properties of a data object, however the null properties (that are not provided by client) are ignored in db layer.
+
+**Custom Data Clause Override**
+
+```javascript
+{
+    status: this.status,
+    updatedAt: new Date(),
+    _paymentConfirmation: this._paymentConfirmation,
+
+}
+```
+
+**Actual Data Clause**
+
+The business api will use the following data clause. Note that any calculated value will be added to the data clause in the api manager.
+
+```javascript
+{
+  status: this.status,
+  updatedAt: new Date(),
+  // _paymentConfirmation parameter is closed to update by client request
+  // include it in data clause unless you are sure
+  _paymentConfirmation: this._paymentConfirmation,
+}
+```
+
+## Business Logic Workflow
+
+### \[1] Step : startBusinessApi
+
+Manager initializes context, prepares request and session objects, and sets up internal structures for parameter handling and milestone execution.
+
+You can use the following settings to change some behavior of this step.
+`apiOptions`, `restSettings`, `grpcSettings`, `kafkaSettings`, `socketSettings`, `cronSettings`
+
+---
+
+### \[2] Step : readParameters
+
+Manager reads parameters from the request or Redis, applies defaults, and writes them into context for downstream milestones.
+
+You can use the following settings to change some behavior of this step.
+`customParameters`, `redisParameters`
+
+---
+
+### \[3] Step : transposeParameters
+
+Manager executes parameter transform scripts and derives any helper values or reshaped payloads into the context.
+
+---
+
+### \[4] Step : checkParameters
+
+Manager validates required parameters, checks ID formats (UUID/ObjectId), and ensures all preconditions for update are met.
+
+---
+
+### \[5] Step : checkBasicAuth
+
+Manager performs login verification, role, and permission checks, enforcing tenant and access rules before update.
+
+You can use the following settings to change some behavior of this step.
+`authOptions`
+
+---
+
+### \[6] Step : buildWhereClause
+
+Manager constructs the WHERE clause used to identify the record to update, applying ownership and parent checks if necessary.
+
+You can use the following settings to change some behavior of this step.
+`whereClause`
+
+---
+
+### \[7] Step : fetchInstance
+
+Manager fetches the existing record from the database and writes it to the context for validation or enrichment.
+
+---
+
+### \[8] Step : checkInstance
+
+Manager performs instance-level validations, including ownership, existence, lock status, or other pre-update checks.
+
+---
+
+### \[9] Action : doStartPayment
+
+**Action Type**: `CheckoutAction`
+
+Start a payment on Stripe platform
+
+```javascript
+class Api {
+  getOrderId() {
+    return this.orderId;
+  }
+
+  async checkoutUpdated(statusLiteral) {
+    switch (statusLiteral) {
+      case "started":
+        await this.checkoutStarted();
+        break;
+      case "canceled":
+        await this.checkoutCanceled();
+        break;
+      case "failed":
+        await this.checkoutFailed();
+        break;
+      case "success":
+        await this.checkoutDone();
+        break;
+      default:
+        await this.checkoutFailed();
+        break;
+    }
+  }
+
+  async checkoutStarted() {
+    this.status = "pending";
+    this._paymentConfirmation = "processing";
+  }
+
+  async checkoutCanceled() {
+    this.status = "pending";
+    this._paymentConfirmation = "cenceled";
+  }
+
+  async checkoutFailed() {
+    this.status = "pending";
+    this._paymentConfirmation = "cenceled";
+  }
+
+  async checkoutDone() {
+    this.status = "paid";
+    this._paymentConfirmation = "paid";
+  }
+
+  getCheckoutParameters(userParams) {
+    const description = `Order for buyer ${this.order.buyerId} with total $${(this.order.totalAmount / 100).toFixed(2)}`;
+
+    return {
+      userId: this.session._USERID,
+      fullname: this.session.fullname,
+      email: this.session.email,
+      description,
+      amount: this.order.totalAmount,
+      currency: "usd",
+      orderId: this.order.id,
+      metadata: {
+        order: "OrderManagement-Order-order",
+        orderId: this.order.id,
+        checkoutName: "order",
+      },
+      storeCard: userParams?.storeCard,
+      paymentUserParams: userParams,
+      bodyParams: this.bodyParams,
+    };
+  }
+
+  async doStartPayment() {
+    // Handle Checkout Action
+
+    try {
+      if (!this.checkoutManager) {
+        throw new Error(
+          "This dboject is not an order object. So auto-checkout process can not be started.",
+        );
+      }
+      this.paymentResult = await this.checkoutManager.startCheckout(
+        this.paymentUserParams,
+      );
+    } catch (err) {
+      if (err instanceof PaymentGateError) {
+        this.paymentResult = err.serializeError();
+        //**errorLog
+      } else throw err;
+    }
+    return this.paymentResult;
+  }
+}
+```
+
+---
+
+### \[10] Step : buildDataClause
+
+Manager prepares the data clause for the update, applying transformations or enhancements before persisting.
+
+You can use the following settings to change some behavior of this step.
+`dataClause`
+
+---
+
+### \[11] Step : mainUpdateOperation
+
+Manager executes the update operation with the WHERE and data clauses. Database-level events are raised if configured.
+
+---
+
+### \[12] Step : buildOutput
+
+Manager assembles the response object from the update result, masking fields or injecting additional metadata.
+
+---
+
+### \[13] Step : sendResponse
+
+Manager sends the response back to the controller for delivery to the client.
+
+---
+
+### \[14] Step : raiseApiEvent
+
+Manager triggers API-level events, sending relevant messages to Kafka or other integrations if configured.
+
+---
+
+## Rest Usage
+
+### Rest Client Parameters
+
+Client parameters are the api parameters that are visible to client and will be populated by the client.
+Note that some api parameters are not visible to client because they are populated by internal system, session, calculation or joint sources.
+
+The `startOrderPayment` api has got 2 client parameters
+
+| Parameter         | Type   | Required | Population                      |
+| ----------------- | ------ | -------- | ------------------------------- |
+| orderId           | ID     | true     | request.params?.orderId         |
+| paymentUserParams | Object | false    | request.body?.paymentUserParams |
+
+### REST Request
+
+To access the api you can use the **REST** controller with the path **PATCH /v1/startorderpayment/:orderId**
+
+```javascript
+axios({
+  method: "PATCH",
+  url: `/v1/startorderpayment/${orderId}`,
+  data: {
+    paymentUserParams: "Object",
+  },
+  params: {},
+});
+```
+
+### REST Response
+
+The API response is encapsulated within a JSON envelope. Successful operations return an HTTP status code of 200 for get, list, update, or delete requests, and 201 for create requests. Each successful response includes a `"status": "OK"` property. For error handling, refer to the "Error Response" section.
+
+Following JSON represents the most comprehensive form of the **`order`** object in the respones. However, some properties may be omitted based on the object's internal logic.
+
+```json
+{
+  "status": "OK",
+  "statusCode": "200",
+  "elapsedMs": 126,
+  "ssoTime": 120,
+  "source": "db",
+  "cacheKey": "hexCode",
+  "userId": "ID",
+  "sessionId": "ID",
+  "requestId": "ID",
+  "dataName": "order",
+  "method": "PATCH",
+  "action": "update",
+  "appVersion": "Version",
+  "rowCount": 1,
+  "order": {
+    "id": "ID",
+    "_owner": "ID",
+    "buyerId": "ID",
+    "items": "Object",
+    "status": "Enum",
+    "status_": "String",
+    "paymentStatus": "Enum",
+    "paymentStatus_": "String",
+    "totalAmount": "Integer",
+    "vendorSplits": "Object",
+    "deliveryAddress": "String",
+    "contactEmail": "String",
+    "contactPhone": "String",
+    "paymentDetails": "String",
+    "_paymentConfirmation": "Enum",
+    "_paymentConfirmation_": "String",
+    "isActive": true,
+    "recordVersion": "Integer",
+    "createdAt": "Date",
+    "updatedAt": "Date"
+  },
+  "paymentResult": {
+    "paymentTicketId": "ID",
+    "orderId": "ID",
+    "paymentId": "String",
+    "paymentStatus": "Enum",
+    "paymentIntentInfo": "Object",
+    "statusLiteral": "String",
+    "amount": "Double",
+    "currency": "String",
+    "success": true,
+    "description": "String",
+    "metadata": "Object",
+    "paymentUserParams": "Object"
+  }
+}
+```
+

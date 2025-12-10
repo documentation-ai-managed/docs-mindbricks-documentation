@@ -1,0 +1,465 @@
+---
+title: SelectJoin Pattern in Mindbricks
+description: >-
+  Lightweight runtime joins inside get and list Business APIs.SelectJoin is a
+  response-shaping pattern used inside a Business API’s selectClause for get and
+  list APIs.
+---
+## 1. Scope
+
+`SelectJoin` is a **response-shaping pattern** used inside a Business API’s **`selectClause`** for `get` and `list` APIs.
+
+It allows you to:
+
+Enrich the API response with fields from **related DataObjects**—without writing explicit joins or extra actions—using the relations that are already defined in your data model.
+
+Key characteristics:
+
+- Works **only** in `get` and `list` Business APIs.
+
+- Uses the **relation metadata** between the main DataObject and joined DataObject.
+
+- Automatically chooses **one-to-one** vs **children (one-to-many) joins** based on relation direction.
+
+- Can sort and slice the child list with `sort` and `topPick`.
+
+- Uses DB or Elasticsearch under the hood, depending on context.
+
+It is deliberately **lightweight** and is not meant to replace BFF DataViews; it is a convenient way to “pull in” extra data beside the main object(s) returned by the API.
+
+---
+
+## 2. Where SelectJoin Lives: `SelectClauseSettings`
+
+From the ontology:
+
+```json
+"SelectClauseSettings": {
+  "__selectProperties.doc": "An array of property names to return in the response. Leave empty to return all fields.",
+  "__selectJoins.doc": "An array of join definition to a related object with the properties to be selected from the join. The result is encapsulated in the result with the `joinName` of the SelectJoin.",
+  "selectProperties": ["PropRefer"],
+  "selectJoins": ["SelectJoin"],
+  "__selectProperties.loadfrom": "currentDataObject"
+}
+```
+
+So, inside a Business API:
+
+```json
+{
+  "selectClause": {
+    "selectProperties": [ "id", "name", "status" ],
+    "selectJoins": [
+      { /* SelectJoin #1 */ },
+      { /* SelectJoin #2 */ }
+    ]
+  }
+}
+```
+
+`selectProperties` limits fields from the **main** DataObject.
+`selectJoins` defines **additional joins** to related objects.
+
+---
+
+## 3. The SelectJoin Pattern Structure
+
+From `patterns.json`:
+
+```json
+"__SelectJoin.doc": "Select join is a definition object for a join from the main object to another related data object to select additional properties from it.",
+"SelectJoin": {
+  "__assetNamePath": "joinName",
+  "__joinName.doc": "A human readable single code safe word to name the SelectJoin definition. This name is also used as the property name of the joined object or object list in the main data object.",
+  "__joinedDataObject.doc": "The name of the data object to be joined. Note that this object should be defined as a related object in the relation settings of one of the main object properties. Or the joined object should have got a relation defined in one of its properties. If the main object is defined as a parent of the joined object, the join result will be an array for an object list. The relation may be either in the same service or in a remote service. Mindbricks will arrange the code to make the join either through db or the elastic search index.",
+  "__condition.doc": "An MScript expression evaluates to Boolean and specifies whether this join should be made or not in code level, e.g (this.includeProductData). Note that this condition can not reference to the main object or main object list, for complex joins use a BFF View.",
+  "__properties.doc": "An array of property names to return in the join response. Leave empty to return all fields.",
+  "__sortBy.doc": "A sort definition to sort if result fetched by join is an array in case the tarrget has a parental relation with the main object. Leave it null for one to one joins where only one or no object will be fetched.",
+  "__topPick.doc": "A number to limit the number of objects in array result fecthed in case the tarrget has a parental relation with the main object. Leave it null for one to one joins where only one or no object will be fetched. If top pick is 1, the result will be a single object even though teh fetch is an array.",
+  "joinName": "String",
+  "condition": "MScript",
+  "joinedDataObject": "DataObjectName",
+  "properties": ["PropRefer"],
+  "sort": ["SortByItem"],
+  "topPick": "Integer",
+  "__properties.loadfrom": "joinedDataObject"
+}
+```
+
+### 3.1 Fields
+
+- **`joinName`** (String)
+
+  - Identifier for this join.
+
+  - Also the property name in the final response.
+
+  - Example: `"category"`, `"tasks"`, `"latestComment"`.
+
+- **`joinedDataObject`** (DataObjectName)
+
+  - The DataObject to join from.
+
+  - Must be *related* to the main object, either:
+
+    - main → joined (main has a relation to joined), OR
+
+    - joined → main (joined has a relation to main).
+
+  - Can be cross-service: `"auth:user"`, `"billing:invoice"`, etc.
+
+- **`condition`** (MScript, optional)
+
+  - Boolean expression that decides whether to perform this join at runtime.
+
+  - Example: `"this.includeDetails"`
+
+  - Important note from docs:
+
+  “This condition can not reference to the main object or main object list; for complex joins use a BFF View.” That means you should base it on parameters, session, flags, etc., not on the actual fetched row data.
+
+- **`properties`** (`PropRefer[]`)
+
+  - Properties from `joinedDataObject` to include in the join result.
+
+  - If empty, all properties will be included.
+
+  - Values are loaded from `joinedDataObject`’s properties (`__properties.loadfrom`).
+
+- **`sort`** (`SortByItem[]`, optional)
+
+  - Sort definition for the join *when the result is an array* (i.e., parent→child join).
+
+  - Example: sort child records by `createdAt` descending.
+
+- **`topPick`** (Integer, optional)
+
+  - Limits number of joined records returned when join result is an array.
+
+  - If `topPick` is `1`, the result is a **single object** instead of an array (even though the technical relation is one-to-many).
+
+  - Example: “get only the latest child record” or “get top 3 related items”.
+
+---
+
+## 4. How SelectJoin Interprets Relations
+
+SelectJoin is **relation-aware**. It does not require you to write where clauses; instead, it uses the relations defined for your DataObjects (`PropertyRelation`).
+
+There are two main scenarios:
+
+### 4.1 Main → Joined (this object points to another)
+
+Example:
+
+- `order.userId` → relation to `user.id`.
+
+In this case:
+
+- SelectJoin of `joinedDataObject = "user"` will produce a **one-to-one join**.
+
+- Response includes a **single object** (or `null`) at property name `joinName` (unless `topPick` alters behavior, see below).
+
+### 4.2 Joined → Main (another object points to this one)
+
+Example:
+
+- `task.projectId` → relation to `project.id`.
+
+- Main object is `project`.
+
+- Joined object is `task` (a child).
+
+In this case:
+
+- Mindbricks treats main object as **parent**, joined object as **children**.
+
+- SelectJoin will produce a **children join**:
+
+  - The result is an **array** of child objects by default.
+
+  - Optionally sorted and trimmed via `sort` and `topPick`.
+
+So:
+
+If relation is from **another object** to this object and that relation defines **this object as parent**, Mindbricks automatically treats SelectJoin as **children join**.
+
+If there is no parent relation, or only a direct reference from current object to joined object, Mindbricks treats it as **one-to-one**.
+
+---
+
+## 5. Behavior in Get vs List APIs
+
+### 5.1 In `get` APIs
+
+- The main object is fetched first.
+
+- For each SelectJoin:
+
+  - Mindbricks analyzes relation metadata.
+
+  - Executes appropriate one-to-one or children join.
+
+  - Attaches joined data under `joinName`.
+
+Example response:
+
+```json
+{
+  "id": "proj-1",
+  "name": "Main Project",
+  "owner": {
+    "id": "user-1",
+    "fullname": "Jane Doe"
+  },
+  "latestTask": {
+    "id": "task-99",
+    "title": "Fix bug #123"
+  }
+}
+```
+
+### 5.2 In `list` APIs
+
+- The list of main objects is fetched (with whereClause, listOptions, filters, pagination).
+
+- For each main item in the list, the SelectJoin logic is applied.
+
+- The join uses efficient lookup mechanisms (DB or ES) under the hood.
+
+Example response:
+
+```json
+[
+  {
+    "id": "proj-1",
+    "name": "Main Project",
+    "tasks": [ ...child tasks... ]
+  },
+  {
+    "id": "proj-2",
+    "name": "Side Project",
+    "tasks": [ ...child tasks... ]
+  }
+]
+```
+
+Internally, Mindbricks can batch or optimize queries depending on context, but from your perspective it’s declarative.
+
+---
+
+## 6. Examples
+
+### 6.1 Example 1 – Get API: Join a Single Owner User
+
+**Use case:**
+In a `getProject` API, you want to include the owner user object.
+
+- Main object: `project`
+
+- Relation: `project.ownerId` → `user.id`
+
+- Join type: one-to-one
+
+**SelectJoin:**
+
+```json
+{
+  "joinName": "owner",
+  "joinedDataObject": "auth:user",
+  "condition": "true",
+  "properties": ["id", "email", "fullname"],
+  "sort": [],
+  "topPick": null
+}
+```
+
+**Result:**
+
+```json
+{
+  "id": "proj-1",
+  "name": "My Project",
+  "ownerId": "user-123",
+  "owner": {
+    "id": "user-123",
+    "email": "owner@example.com",
+    "fullname": "Owner Name"
+  }
+}
+```
+
+---
+
+### 6.2 Example 2 – Get API: Children Join with `topPick` (Latest Child)
+
+**Use case:**
+For a `getClub` API, include **the oldest member** as a single object.
+
+- Main object: `club`
+
+- Child object: `clubMember` with `clubMember.clubId` → `club.id`
+
+- Relation: parent (`club`) → child (`clubMember`)
+
+**SelectJoin:**
+
+```json
+{
+  "joinName": "oldestMember",
+  "joinedDataObject": "clubMember",
+  "condition": "true",
+  "properties": ["id", "memberName", "age"],
+  "sort": [
+    {
+      "name": "byAgeDesc",
+      "property": "age",
+      "order": "desc"
+    }
+  ],
+  "topPick": 1
+}
+```
+
+Because `club` is parent of `clubMember`, this is a **children join**:
+
+- `sort` applied by `age desc`.
+
+- `topPick = 1` → result is a **single object**, not an array.
+
+**Result:**
+
+```json
+{
+  "id": "club-1",
+  "name": "Chess Club",
+  "oldestMember": {
+    "id": "cm-77",
+    "memberName": "John",
+    "age": 64
+  }
+}
+```
+
+---
+
+### 6.3 Example 3 – List API: Attach All Tasks to Each Project
+
+**Use case:**
+List projects and include children tasks for each.
+
+- Main object: `project`
+
+- Joined object: `task` with `task.projectId` → `project.id`
+
+**SelectJoin:**
+
+```json
+{
+  "joinName": "tasks",
+  "joinedDataObject": "task",
+  "condition": "this.includeTasks === true",
+  "properties": ["id", "title", "status", "dueDate"],
+  "sort": [
+    {
+      "name": "byDueDate",
+      "property": "dueDate",
+      "order": "asc"
+    }
+  ],
+  "topPick": null
+}
+```
+
+**Response:**
+
+```json
+[
+  {
+    "id": "proj-1",
+    "name": "Main Project",
+    "tasks": [
+      { "id": "t1", "title": "Task A", "status": "open" },
+      { "id": "t2", "title": "Task B", "status": "inProgress" }
+    ]
+  },
+  {
+    "id": "proj-2",
+    "name": "Side Project",
+    "tasks": [ /* ... */ ]
+  }
+]
+```
+
+The `condition` can be toggled based on parameters or session (just must not depend on the actual list content, per the docs).
+
+---
+
+### 6.4 Example 4 – Cross-Service Join in a List
+
+**Use case:**
+List orders from `orders` service and join user info from `auth` service.
+
+- Main object: `orders:order`
+
+- Joined object: `auth:user`
+
+- Relation: `order.userId` → `user.id`
+
+**SelectJoin:**
+
+```json
+{
+  "joinName": "user",
+  "joinedDataObject": "auth:user",
+  "condition": "true",
+  "properties": ["id", "email", "fullname"],
+  "sort": [],
+  "topPick": null
+}
+```
+
+Mindbricks will arrange the join using DB or Elasticsearch index, depending on configuration, for each order record.
+
+---
+
+## 7. When to Use SelectJoin vs Other Patterns
+
+| Pattern                    | Level         | Use When                                          |
+| -------------------------- | ------------- | ------------------------------------------------- |
+| `SelectJoin`               | Business API  | Enrich `get` / `list` responses with related data |
+| `PropertyStaticJoin`       | DataProperty  | Materialize related values at write time          |
+| `ViewAggregate` (BFF)      | BFF DataViews | Build reusable, cross-service read models         |
+| `FetchObjectAction`/others | Business API  | Complex workflows or advanced join logic          |
+
+**Use SelectJoin** when:
+
+- You already have relations defined between DataObjects.
+
+- You just need to **select some fields** from related objects for this specific API.
+
+- You don’t need a full BFF DataView or static (denormalized) field.
+
+---
+
+## 8. Summary
+
+`SelectJoin` is a **light, relation-aware join mechanism** that works inside `SelectClauseSettings` for `get` and `list` Business APIs:
+
+- Uses relation definitions to figure out **how** to join.
+
+- Distinguishes **one-to-one** vs **children (one-to-many)** joins automatically:
+
+  - If relation is from main → joined → one-to-one.
+
+  - If relation is from joined → main and main is parent → children join.
+
+- Lets you choose properties, sorting, and `topPick` to control the shape and size of join results.
+
+- Works with local or remote (cross-service) DataObjects.
+
+- Uses DB or Elasticsearch under the hood, without you writing join code.
+
+It’s the perfect tool when you want your Business API responses to be **enriched, but not overloaded**—a simple, declarative way to say:
+
+“Also include this related data here, in this shape.”

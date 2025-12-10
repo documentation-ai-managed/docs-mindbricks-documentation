@@ -1,0 +1,592 @@
+---
+title: Indexing & Caching in Mindbricks
+description: >-
+  How Mindbricks makes reads fast (and safe) across DB, Elasticsearch, and
+  Redis.
+---
+## 1. Overview
+
+Mindbricks is designed to generate **production-ready microservices**, which includes:
+
+- Efficient **database indexing**
+
+- Fast **searching & filtering** via **Elasticsearch**
+
+- Smart **caching** of entities and queries using **Redis**
+
+- Consistent **uniqueness constraints** across properties and composite keys
+
+The goal is:
+
+<Callout kind="info" collapsed="false">
+  You describe *what* should be indexed or cached via patterns; Mindbricks generates the *how* in code and infrastructure.
+</Callout>
+
+Core patterns involved:
+
+- `PropertyIndexSettings` – per-property indexing hints.
+
+- `CompositeIndex` – multi-field (composite) database index definitions.
+
+- `RedisEntityCacheSettings` & `RedisEntityCacheConfig` – per-object caching strategy.
+
+- List/search helpers (`ListSearchFilter`, `ListOptions`) that sit on top of ES and indexing.
+
+- Uniqueness & secondary keys.
+
+Runtime helpers from `common` such as `EntityCache`, `ElasticIndexer`, `QueryCache`, etc., use these patterns.
+
+---
+
+## 2. Property-Level Indexing: `PropertyIndexSettings`
+
+Every `DataProperty` may include `indexSettings` that tell Mindbricks how to index it.
+
+```json
+"PropertyIndexSettings": {
+  "indexedInElastic": "Boolean",
+  "fulltextSearch": "Boolean",
+  "indexedInDb": "Boolean",
+  "unique": "Boolean",
+  "clusterInRedis": "Boolean",
+  "cacheSelect": "Boolean",
+  "isSecondaryKey": "Boolean"
+}
+```
+
+### 2.1 `indexedInDb` – Database Index
+
+If `indexedInDb = true`:
+
+- Mindbricks generates a database index (e.g., in PostgreSQL) for this property.
+
+- Useful for fields frequently used in `WHERE`, `ORDER BY`, or join conditions.
+
+Example:
+
+```json
+"indexSettings": {
+  "indexedInDb": true
+}
+```
+
+Use for:
+
+- `email`
+
+- `createdAt`
+
+- `status`
+
+### 2.2 `unique` – Uniqueness Constraint
+
+If `unique = true`:
+
+- A **unique index** is created on this column.
+
+- DB-level constraint ensures no two records share the same value.
+
+Example:
+
+```json
+"indexSettings": {
+  "indexedInDb": true,
+  "unique": true
+}
+```
+
+Use for:
+
+- `user.email`
+
+- `tenant.codename`
+
+- `apiKey`
+
+Note: For uniqueness across *multiple* fields, use `CompositeIndex` instead of `unique` (see below).
+
+### 2.3 `isSecondaryKey` – Alternate Identifier
+
+`isSecondaryKey = true` marks a property as a **secondary key**:
+
+- Semantically: “another way to identify a record apart from its primary key (id).”
+
+- Used by code generators to treat this field as a valid identifier for certain operations.
+
+Example:
+
+- `username` as secondary key to `id`
+
+- `slug` or `code` used as human-friendly ID
+
+```json
+"indexSettings": {
+  "indexedInDb": true,
+  "isSecondaryKey": true
+}
+```
+
+---
+
+## 3. Composite Indexes: `CompositeIndex` & `OnDuplicate`
+
+Sometimes you need an index over **multiple fields** (compound index), both for performance and uniqueness.
+
+Pattern:
+
+```json
+"CompositeIndex": {
+  "indexName": "String",
+  "indexFields": ["PropRefer"],
+  "onDuplicate": "OnDuplicate"
+}
+```
+
+`indexFields`: list of property references forming the composite index.
+
+`OnDuplicate` controls how duplicates are handled in insert operations when there’s a unique composite index:
+
+```json
+"OnDuplicate": ["doUpdate", "throwError", "stopOperation", "doInsert"]
+```
+
+- `doUpdate` – upsert behavior: update existing record when conflict occurs.
+
+- `throwError` – default DB error on duplicate.
+
+- `stopOperation` – no error, no insert (silently skip).
+
+- `doInsert` – ignore uniqueness constraint and insert anyway (index for search only).
+
+### 3.1 Example – Unique per Tenant
+
+A classic pattern:
+
+email must be unique per tenant.
+
+Define a composite index on `(tenantId, email)`:
+
+```json
+"compositeIndexSettings": [
+  {
+    "indexName": "uniqueTenantEmailIndex",
+    "indexFields": ["tenantId", "email"],
+    "onDuplicate": "throwError"
+  }
+]
+```
+
+Now:
+
+- `user.email` can repeat across tenants.
+
+- `(tenantId, email)` pair must be unique.
+
+### 3.2 Example – Upsert by Composite Key
+
+For a “settings” object:
+
+```json
+"compositeIndexSettings": [
+  {
+    "indexName": "uniqueSettingPerUser",
+    "indexFields": ["userId", "settingKey"],
+    "onDuplicate": "doUpdate"
+  }
+]
+```
+
+Insert operations on the same `(userId, settingKey)` will update existing records instead of creating duplicates.
+
+---
+
+## 4. Elasticsearch Indexing & Full Text Search
+
+Mindbricks supports indexing DataObject instances into **Elasticsearch** as part of its CQRS/read side. Per property, two flags control ES behavior:
+
+- `indexedInElastic`
+
+- `fulltextSearch`
+
+Also, text-type fields have built-in full text support in ES.
+
+### 4.1 `indexedInElastic`
+
+If `indexedInElastic = true`:
+
+- This property will be included in the Elasticsearch index for the DataObject.
+
+- It can be used in **filtering**, **sorting**, **aggregations**, and **search**.
+
+Example:
+
+```json
+"indexSettings": {
+  "indexedInElastic": true
+}
+```
+
+Useful for:
+
+- `status`, `categoryId`, dates, numeric fields, etc.
+
+- Filters in `ListSearchFilter` or `FetchFromElasticAction`.
+
+### 4.2 `fulltextSearch`
+
+If `fulltextSearch = true`:
+
+- Mindbricks creates an additional **text index** on this property in ES.
+
+- Typically used for `String`/`Text` fields where full text search is needed.
+
+Example:
+
+```json
+"indexSettings": {
+  "indexedInElastic": true,
+  "fulltextSearch": true
+}
+```
+
+Notes from the pattern:
+
+Text-type data properties already have full text search, and `fulltextSearch` adds more explicit index support for non-Text types.
+
+### 4.3 Using ES in List/Search APIs
+
+Mindbricks uses ES indexes in:
+
+- **`ListSearchFilter`** – pre-search by keyword on `searchProperties`, gets ID list, then filters DB query.
+
+- **`FetchFromElasticAction`** – raw ES body queries for advanced custom logic.
+
+- **BFF DataViews** – stored views for complex multi-object read models.
+
+Example `ListSearchFilter`:
+
+```json
+"listOptions": {
+  "searchFilter": {
+    "hasSearchFilter": true,
+    "condition": "!!this.keyword",
+    "keyword": "this.keyword",
+    "searchProperties": ["title", "description"]
+  }
+}
+```
+
+Mindbricks:
+
+1. Performs ES search on those properties.
+
+2. Gets matching IDs.
+
+3. Restricts DB list query using `id IN [idsFromES]`.
+
+---
+
+## 5. Redis Entity Caching: `RedisEntityCacheSettings`
+
+To reduce DB load for frequently-accessed entities, Mindbricks supports **entity-level caching in Redis**.
+
+Pattern:
+
+```json
+"RedisEntityCacheSettings": {
+  "useEntityCaching": "Boolean",
+  "configuration": "RedisEntityCacheConfig"
+}
+```
+
+```json
+"RedisEntityCacheConfig": {
+  "useSmartCaching": "Boolean",
+  "cacheCriteria": "MScript",
+  "checkCriteriaOnlyInCreateAndUpdates": "Boolean"
+}
+```
+
+### 5.1 `useEntityCaching`
+
+If `useEntityCaching = true`:
+
+- Each entity instance of this DataObject may be cached in Redis.
+
+- Reads can first check the Redis **EntityCache**.
+
+- Updates/deletes will invalidate or refresh the cached entries.
+
+### 5.2 `cacheCriteria` (MScript)
+
+This optional MScript expression decides **which instances should be cached**:
+
+Example:
+
+```json
+"cacheCriteria": "{ isActive: { \"$eq\": true }, status: { \"$eq\": 'published' } }"
+```
+
+Only objects matching this query are cached.
+
+`cacheCriteria` is usually an MScript Query object; Mindbricks uses it to decide cache eligibility at create/update or at read time (depending on config).
+
+### 5.3 `useSmartCaching`
+
+If `useSmartCaching = true`:
+
+- TTL (time-to-live) for cache entries can be adjusted based on **access frequency** or other heuristics.
+
+- Good for large datasets with irregular access patterns (hot vs cold entities).
+
+### 5.4 `checkCriteriaOnlyInCreateAndUpdates`
+
+- `true` → Evaluate `cacheCriteria` **only** during create/update.
+
+  - Good when criteria depend only on entity fields (e.g., `isActive`, `status`).
+
+- `false` → Re-evaluate at read time.
+
+  - Good when criteria depend on external context such as current date/time.
+
+### 5.5 Runtime Helpers
+
+The generated code uses the `EntityCache` helper from `common`:
+
+- `EntityCache.get(...)` – check Redis for a cached entity.
+
+- `EntityCache.set(...)` – store entity in Redis.
+
+- `EntityCache.invalidate(...)` – on updates/deletes.
+
+This logic is integrated into Business APIs where `readFromEntityCache` is enabled (e.g., `ApiOptions.readFromEntityCache = true` for certain `get` or `list` APIs).
+
+---
+
+## 6. Property-Level Caching Hints: `clusterInRedis` & `cacheSelect`
+
+Back in `PropertyIndexSettings`, we saw:
+
+- `clusterInRedis`
+
+- `cacheSelect`
+
+These are **hints** for how Redis should be used around this property.
+
+### 6.1 `clusterInRedis`
+
+“Specifies whether the property should contribute to Redis cluster keys for partial cache invalidation.”
+
+- When `clusterInRedis = true`, this field is used to group cache entries.
+
+- This helps implement targeted invalidation: e.g., “invalidate all cached entities with `tenantId = X`” or “all events for `projectId = Y`”.
+
+Example:
+
+```json
+"indexSettings": {
+  "clusterInRedis": true
+}
+```
+
+Use for:
+
+- `tenantId` (`clientId`, `storeId`, etc.)
+
+- `projectId`, `organizationId` when many rows group under a parent
+
+### 6.2 `cacheSelect`
+
+“Defines whether this property is used as a key in Redis entity cache for batch-select operations.”
+
+- `cacheSelect = true` means developers may use this property as a **lookup key** in cached sets.
+
+- E.g., caching an ID list of entities by `status`.
+
+Example:
+
+```json
+"indexSettings": {
+  "cacheSelect": true
+}
+```
+
+Use for:
+
+- `status` or `type` fields when you frequently need “all objects matching this status” from cache.
+
+These hints affect how the generated code (or your custom library code) uses `EntityCache`, `QueryCache`, and cluster strategies.
+
+---
+
+## 7. Query-Level Caching (Runtime Helpers)
+
+Beyond entity caching, Mindbricks common library provides:
+
+- `QueryCache`
+
+- `QueryCacheInvalidator`
+
+These are **runtime abstractions** for caching expensive queries:
+
+- Map a query signature (e.g., JSON representation + version) to a cached result.
+
+- Provide invalidation hooks when underlying data changes.
+
+While not configured via patterns yet, they work **on top** of DB and ES indexing and per-object entity caching.
+
+Example conceptual use pattern (in service library):
+
+```js
+const { QueryCache, QueryCacheInvalidator } = require("common");
+
+const queryCache = new QueryCache("userList");
+
+async function getExpensiveUserList(criteria) {
+  const key = JSON.stringify(criteria);
+  const cached = await queryCache.get(key);
+  if (cached) return cached;
+
+  const result = await DB.getUserListByQuery(criteria);
+  await queryCache.set(key, result);
+  return result;
+}
+```
+
+---
+
+## 8. Putting It All Together – Example Design
+
+Imagine a multi-tenant SaaS with `Event` objects.
+
+### 8.1 Data Property Index Settings
+
+For the `Event` DataObject:
+
+```json
+"properties": [
+  {
+    "basicSettings": { "name": "tenantId", "type": "ID" },
+    "indexSettings": {
+      "indexedInDb": true,
+      "clusterInRedis": true
+    }
+  },
+  {
+    "basicSettings": { "name": "title", "type": "String" },
+    "indexSettings": {
+      "indexedInElastic": true,
+      "fulltextSearch": true
+    }
+  },
+  {
+    "basicSettings": { "name": "code", "type": "String" },
+    "indexSettings": {
+      "indexedInDb": true,
+      "unique": true,
+      "isSecondaryKey": true
+    }
+  },
+  {
+    "basicSettings": { "name": "startDate", "type": "Date" },
+    "indexSettings": {
+      "indexedInDb": true,
+      "indexedInElastic": true
+    }
+  }
+]
+```
+
+### 8.2 Composite Index
+
+```json
+"compositeIndexSettings": [
+  {
+    "indexName": "tenantStartDateIndex",
+    "indexFields": ["tenantId", "startDate"],
+    "onDuplicate": "doInsert"
+  }
+]
+```
+
+Used for fast tenant-scoped event queries.
+
+### 8.3 Redis Entity Cache
+
+```json
+"objectSettings": {
+  "redisEntityCacheSettings": {
+    "useEntityCaching": true,
+    "configuration": {
+      "useSmartCaching": true,
+      "cacheCriteria": "{ isActive: { \"$eq\": true } }",
+      "checkCriteriaOnlyInCreateAndUpdates": true
+    }
+  }
+}
+```
+
+Now:
+
+- Active events are cached.
+
+- TTL is dynamically computed.
+
+- `tenantId` helps cluster invalidation.
+
+### 8.4 List/Search Business API
+
+- Use `searchFilter` on `title`.
+
+- Use `listSortBy` on `startDate`.
+
+- Use `membershipFilters` & `permissionFilters` for access.
+
+- Use BFF DataView + ES for advanced multi-index dashboards.
+
+---
+
+## 9. Summary
+
+Indexing and caching in Mindbricks are **pattern-driven** and deeply integrated:
+
+1. **Property-level index hints** (`indexedInDb`, `indexedInElastic`, `fulltextSearch`, `unique`, `isSecondaryKey`, `clusterInRedis`, `cacheSelect`)
+
+   - Control how DB, Elasticsearch, and Redis treat each property.
+
+2. **CompositeIndex** & `OnDuplicate`
+
+   - Support complex unique constraints and upsert-like behavior.
+
+3. **Elasticsearch integration**
+
+   - Per-property ES indexing and full-text search.
+
+   - Higher-level features like `ListSearchFilter` & `FetchFromElasticAction`.
+
+4. **Redis Entity Cache** (`RedisEntityCacheSettings`)
+
+   - Object-level caching with configurable criteria and smart TTL.
+
+5. **Runtime helpers**
+
+   - `EntityCache`, `ElasticIndexer`, `QueryCache`, `QueryCacheInvalidator` give you direct programmatic access to caching and indexing behaviors.
+
+The result is a backend that can:
+
+- Scale reads gracefully
+
+- Enforce uniqueness and constraints reliably
+
+- Support powerful search and list filters
+
+- Avoid unnecessary DB load through smart use of caching
+
+—all while you, as the architect, remain focused on **designing patterns**, not infrastructure plumbing.
+
+If you want, we can follow this with:
+
+- An **Indexing & Caching Cookbook** (pattern + code examples, e.g. “Fast autocomplete”, “Tenant-scoped dashboards”).
+
+- A **Performance Tuning Guide** for large Mindbricks projects.
+

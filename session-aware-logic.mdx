@@ -1,0 +1,586 @@
+---
+title: Session & Session-Aware Business Logic in Mindbricks
+---
+## 1. What is a Session in Mindbricks?
+
+In Mindbricks, a **session** represents:
+
+- **Who** the current caller is (user identity)
+
+- **Where** they are (tenant, location, timezone)
+
+- **How** they are authenticated (token, source)
+
+- **What** their permissions and environment look like (roles, verification flags, language, user agent, etc.)
+
+At runtime:
+
+- Session data is stored in **Redis** (session store).
+
+- Session is retrieved from the **authentication token** (e.g., JWT) or via **remote session** configuration.
+
+- Once resolved, it’s attached to the Business API manager as:
+
+```js
+this.session
+```
+
+and is usable in any MScript or BusinessApiAction.
+
+A sample session:
+
+```json
+{
+  "appCodename": "tickatme",
+  "isAbsolute": true,
+  "tenantName": "store",
+  "tenantCodename": "root",
+  "multiTenant": true,
+  "sessionId": "4cbfdd79a9644593aba61d77a7d986e5",
+  "userId": "f7103b85-fcda-4dec-92c6-c336f71fd3a2",
+  "email": "admin@admin.com",
+  "fullname": "Root User",
+  "avatar": "https://gravatar.com/avatar/...",
+  "roleId": "superAdmin",
+  "mobile": "00-0-0000000000000",
+  "mobileVerified": true,
+  "emailVerified": true,
+  "storeId": "d26f6763-ee90-4f97-bd8a-c69fabdb4780",
+  "_tenantId": "d26f6763-ee90-4f97-bd8a-c69fabdb4780",
+  "registeredAt": "2025-11-13T19:32:35.845Z",
+  "loginAt": "2025-12-09T13:34:02.849Z",
+  "_USERID": "f7103b85-fcda-4dec-92c6-c336f71fd3a2",
+  "loginIp": "161.185.160.93",
+  "city": "New York",
+  "country": "United States",
+  "localDateTime": "2025-12-09T08:34:03-05:00",
+  "gmtOffset": -18000,
+  "timeZoneCode": "EST",
+  "language": {
+    "code": "en",
+    "name": "English",
+    "native": "English"
+  },
+  "location": {
+    "lat": 40.7611694335938,
+    "lon": -73.950813293457
+  },
+  "isp": "The City of New York",
+  "agent": {
+    "deviceType": "desktop",
+    "isMobile": false,
+    "isTablet": false,
+    "isDesktop": true,
+    "os": "macOS",
+    "osVersion": "10.15.7",
+    "browserName": "Chrome",
+    "browserVersion": "142.0.0.0",
+    "architecture": null,
+    "model": null,
+    "vendor": "Apple"
+  },
+  "checkTokenMark": "tickatme-inapp-token",
+  "source": "redis",
+  "expiresAt": "24 days, 17 hours, 52 minutes, 29 seconds",
+  "lastActiveAt": "2025-12-14T19:41:34.176Z",
+  "lastActiveIp": "161.185.160.93"
+}
+```
+
+You can use any of these values in MScript: `this.session.userId`, `this.session.roleId`, `this.session._tenantId`, `this.session.language.code`, etc.
+
+---
+
+## 2. How Patterns Configure Session Creation & Retrieval
+
+Session behavior is controlled at the **Authentication** level by several patterns under `ProjectAuthentication`.
+
+### 2.1 JWT-Based Sessions – `JWTAuthentication`
+
+Pattern: `JWTAuth` and `JWTAuthConfig`.
+
+- `useJWTForAuthentication`
+
+- `tokenPeriodInDays`
+
+- `keyRefreshPeriodInDays`
+
+These define:
+
+- Whether JWT is used
+
+- How long tokens live
+
+- How often key pairs are rotated
+
+When JWT is used, the auth service:
+
+1. Generates a token with a session payload (or session ID).
+
+2. Stores the session in Redis (if using a session store).
+
+3. On each request:
+
+   - Validates token.
+
+   - Retrieves session from Redis (or uses token as session if configured).
+
+   - Sets `this.session`.
+
+### 2.2 Remote Service Authentication – `RemoteServiceAuthentication`
+
+Pattern: `RemoteServiceAuthentication` and `RemoteServiceAuthenticationConfig`.
+
+Key fields:
+
+- `remoteServiceRequest` (HTTPRequest)
+
+- `sessionIdPathInToken`
+
+- `sessionReadLocation` (`readFromSessionStore`, `tokenIsSession`, `readFromRemoteService`)
+
+They define:
+
+- How to validate a token via **external user service**.
+
+- How to locate the `sessionId` inside a token.
+
+- Where to read session data from:
+
+  - session store (Redis)
+
+  - token itself
+
+  - remote service using `RemoteSession`.
+
+### 2.3 Remote Session – `RemoteSession`
+
+Pattern: `RemoteSession` + `RemoteSessionConfig`.
+
+- `sessionPath` – where the session is in HTTP response body
+
+- `sessionIdPath` – path to session ID field
+
+- `writeInStore` – whether to cache session locally
+
+- `sessionRequest` – HTTP config to fetch session
+
+Used when session data lives in **external session service** (not Mindbricks).
+
+### 2.4 Cookie Settings – `CookieSettings`
+
+Defines allowed domains for cookies. It doesn’t change the shape of `this.session`, but it controls **how session tokens are transported** to the auth service.
+
+---
+
+## 3. Session Structure & Multi-Tenancy
+
+Session structure is shaped by:
+
+- `LoginDefUserSettings`
+
+- `LoginDefTenantSettings`
+
+- The auth service logic
+
+- Multi-tenant configuration
+
+### 3.1 Identity Fields
+
+Common identity fields in session:
+
+- `userId`, `_USERID` – main user identifier
+
+- `email`, `fullname`, `avatar`
+
+- `roleId` – user’s role(s) (RBAC)
+
+- `mobile`, `mobileVerified`, `emailVerified`
+
+These fields are derived from the **user DataObject** (configured by `LoginDefinition` and `userProperties`).
+
+### 3.2 Tenant Fields (Multi-Tenant)
+
+When `useMultiTenantFeature = true` and a tenant name is defined (`tenantName` in `LoginDefTenantSettings`), the session also includes:
+
+- `tenantName` – logical tenant concept (e.g., `"store"`, `"client"`, `"workspace"`)
+
+- `tenantCodename` – which tenant user is currently in (e.g., `"root"`, `"babil"`)
+
+- `<tenantName>Id` – e.g., `storeId`, `clientId`
+
+- `_tenantId` – canonical internal tenant ID
+
+These are used by:
+
+- `ObjectAuthorization.objectDataIsInTenantLevel`
+
+- `ApiAuthOptions.apiInSaasLevel`
+
+- membership & permissions that depend on tenant.
+
+### 3.3 Environment & Context Fields
+
+Session may also carry:
+
+- Login and activity times (`loginAt`, `lastActiveAt`, `registeredAt`)
+
+- Network info (`loginIp`, `lastActiveIp`, `city`, `country`, `isp`)
+
+- `language` – current language (used by BFF, notifications, templates)
+
+- `location` – lat/lon (could be used in geo queries, ABAC rules, etc.)
+
+- `agent` – device/OS/browser info (auditing, risk analysis, ABAC conditions)
+
+These are not directly defined in patterns, but **can be referenced in MScript** anywhere `this.session` is allowed.
+
+---
+
+## 4. `this.session` in MScript & API Context
+
+According to the MScript guide and Business API design, all MScript expressions are executed in the **API manager context**, where:
+
+- `this` = API context class instance
+
+- `this.session` = session object retrieved from token / store
+
+You can use `this.session` in:
+
+- `WhereClauseSettings.fullWhereClause`
+
+- `ExtendedClause.doWhen` / `excludeWhen` / `whereClause`
+
+- `ValidationAction.validationScript`
+
+- `MembershipCheckAction.userKey` / `ListMembershipFilter.userKey`
+
+- `PermissionCheckAction` and `ObjectPermissionCheckAction` logic
+
+- `ListSearchFilter.condition`
+
+- `ListJointFilter.condition` or `whereClause`
+
+- `PropertyFormulaSettingsConfig.formula` / `updateFormula`
+
+- `PropertyContextSettingsConfig.contextParam` (if you write code that copies from `this.session`)
+
+- Notification `fromUser`, `condition`, etc.
+
+- DataView conditions (for dynamic views).
+
+Example MScript snippet:
+
+```json
+"fullWhereClause": "({ ownerId: { \"$eq\": this.session.userId } })"
+```
+
+---
+
+## 5. Session-Driven Property Mapping – `PropertySessionSettings`
+
+Pattern: `PropertySessionSettings` + `PropertySessionSettingsConfig`.
+
+These are used to **automatically populate DataObject fields from session** at create/update time.
+
+### 5.1 Fields
+
+- `isSessionData` – toggle
+
+- `sessionParam` – name of the session field
+
+- `isOwnerField` – marks property as **owner field** for access checks
+
+Example (in a `task` DataObject):
+
+```json
+{
+  "basicSettings": {
+    "name": "ownerId",
+    "type": "ID"
+  },
+  "sessionSettings": {
+    "isSessionData": true,
+    "configuration": {
+      "sessionParam": "userId",
+      "isOwnerField": true
+    }
+  }
+}
+```
+
+At runtime, create/update APIs:
+
+- Read `this.session.userId`
+
+- Set `task.ownerId` = `this.session.userId`
+
+- Mark it as an owner field for automatic ownership checks (if used by ObjectAuthorization or ApiAuthOptions).
+
+Combining this with `ObjectAuthorization` and `ApiAuthOptions.ownershipCheck` gives a very powerful *owner-based ACL* mechanism.
+
+---
+
+## 6. Session & API-Level Authorization – `ApiAuthOptions`
+
+Pattern: `ApiAuthOptions` in each `BusinessApi`.
+
+Key fields:
+
+- `loginRequired` – whether session is required
+
+- `apiInSaasLevel` – whether API is SaaS-level (cross-tenant)
+
+- `ownershipCheck` – enforce ownership on main object
+
+- `parentOwnershipChecks[]` – additional parent objects to check membership/ownership on
+
+- `absoluteRoles[]` – roles that bypass all authorization checks (401/403)
+
+- `checkRoles[]` – roles required to pass basic role checks
+
+- `defaultPermissions[]` – required permission strings
+
+`this.session` is implicitly used to:
+
+- Determine user’s `roleId` for `checkRoles` and `absoluteRoles`.
+
+- Determine `tenantId` for `apiInSaasLevel` or tenant-specific logic.
+
+- Evaluate ownership using `isOwnerField` properties.
+
+Example API-level logic:
+
+```json
+"authOptions": {
+  "loginRequired": true,
+  "ownershipCheck": true,
+  "absoluteRoles": ["superAdmin"],
+  "checkRoles": ["tenantAdmin", "tenantOwner"],
+  "defaultPermissions": ["projectManagement.viewProject"],
+  "apiInSaasLevel": false
+}
+```
+
+At runtime:
+
+- If `this.session.roleId` is in `absoluteRoles`, all 401/403 checks are bypassed.
+
+- Otherwise, RBAC/PBAC rules and ownership checks run using `this.session.userId`, `this.session.roleId`, `this.session._tenantId`.
+
+---
+
+## 7. Session in Permission & Access Control Flows
+
+### 7.1 Role-Based & Permission-Based Access
+
+RBAC patterns:
+
+- `RBACSettings` (`rolesObject`, `usersHaveMultipleRoles`)
+
+- `PermissionBasics` and `PermissionGroup`
+
+- `PermissionTypes` toggles
+
+At runtime, role & permission checks use:
+
+- `this.session.roleId`
+
+- `this.session.userId`
+
+- tenant info for tenant-based permissions
+
+### 7.2 PermissionCheckAction & ObjectPermissionCheckAction
+
+Patterns: `PermissionCheckAction`, `ObjectPermissionCheckAction`.
+
+They often use `this.session` implicitly (via permission system) or explicitly.
+
+- `PermissionCheckAction` has:
+
+  - `permissionName`
+
+  - `checkType` (live/stored)
+
+- `ObjectPermissionCheckAction` has:
+
+  - `permissionName`
+
+  - `readObjectIdFrom` (MScript – can use `this.session.userId` indirectly as part of logic)
+
+  - `checkType`
+
+These actions ensure that the current `session` user has required global or object-level permission.
+
+### 7.3 ValidationAction with Session
+
+`ValidationAction.validationScript` can use `this.session` directly:
+
+Example:
+
+```json
+{
+  "description": "Disallow non-tenant admins from archiving projects.",
+  "shouldBeTrue": true,
+  "checkType": "liveCheck",
+  "validationScript": "this.session.roleId === 'tenantAdmin' || this.session.roleId === 'tenantOwner'",
+  "errorMessage": "Only tenant admins can archive projects.",
+  "errorStatus": "403"
+}
+```
+
+---
+
+## 8. Session in Membership & List Filters
+
+### 8.1 MembershipCheckAction & ListMembershipFilter
+
+Patterns: `MembershipCheckAction`, `ListMembershipFilter`.
+
+Both have `userKey` fields that typically use `this.session.userId`:
+
+```json
+"userKey": "this.session.userId"
+```
+
+- `MembershipCheckAction` checks membership for **a single object**.
+
+- `ListMembershipFilter` filters the main list to objects where the session user is a member.
+
+### 8.2 ListPermissionFilter
+
+`ListPermissionFilter` decides which objects are visible to the current user based on `permission`.
+Again, `this.session.userId` and `this.session.roleId` are used by the permission engine to build ID lists.
+
+### 8.3 ListSearchFilter & Joint Filters
+
+List filter conditions (`condition` fields) often reference `this.session` to tailor behavior:
+
+- Skip search filters for certain roles.
+
+- Apply joint filters only if the session is in a specific tenant.
+
+Example:
+
+```json
+"searchFilter": {
+  "hasSearchFilter": true,
+  "condition": "this.session.roleId !== 'superAdmin'",
+  "keyword": "this.keyword",
+  "searchProperties": ["name", "email"]
+}
+```
+
+---
+
+## 9. Session in Notification & BFF
+
+### 9.1 Notification Targets & Deep Links
+
+Patterns: `EventNotification`, `NotificationTemplate`, etc.
+
+- `fromUser` often uses `this.session.userId`
+
+- `actionDeepLink` / `actionText` may use session or tenant info to create appropriate frontend deeplinks (e.g., subdomain per tenant).
+
+Example:
+
+```json
+"fromUser": "this.session.userId",
+"actionDeepLink": "`https://app.example.com/${this.session.tenantCodename}/orders/${data.orderId}`"
+```
+
+### 9.2 BFF DataViews & Language
+
+DataViews and BFF can also reference `this.session` in MScript (for dynamic views) to:
+
+- Filter by tenant
+
+- Filter by user
+
+- Localize lookups based on `this.session.language.code`
+
+---
+
+## 10. Session in MScript Formulas & Context
+
+Any MScript formula or context param can use `this.session`:
+
+- Property formulas (`PropertyFormulaSettings`) can compute values based on session: e.g., initial timezone, language code, default currency.
+
+- Context actions (`AddToContextAction`, `CreateObjectAction`) can copy fields from `this.session` into the context or response.
+
+Example formula:
+
+```json
+"formula": "this.session.language?.code ?? 'en'"
+```
+
+Example AddToContextAction:
+
+```json
+{
+  "extendClassName": "AddToContextAction",
+  "context": [
+    {
+      "contextName": "currentTenantId",
+      "contextValue": "this.session._tenantId"
+    }
+  ]
+}
+```
+
+---
+
+## 11. Design Guidelines for Session-Aware Logic
+
+To use session effectively:
+
+1. **Always treat&#x20;****`this.session`****&#x20;as the canonical source of identity & tenancy.**
+
+   - Use `this.session.userId` instead of trusting client-submitted `userId`.
+
+   - Use `this.session._tenantId` to scope tenant-level data.
+
+2. **Use&#x20;****`PropertySessionSettings`****&#x20;for identity fields on DataObjects.**
+
+   - e.g., `ownerId`, `createdBy`, `updatedBy`.
+
+   - Mark `isOwnerField = true` when appropriate.
+
+3. **Use&#x20;****`ApiAuthOptions`****&#x20;for API-level protections.**
+
+   - `loginRequired`, `ownershipCheck`, `absoluteRoles`, `defaultPermissions`.
+
+4. **Use membership & list filters for session-specific access.**
+
+   - `MembershipCheckAction`
+
+   - `ListMembershipFilter`
+
+   - `ListPermissionFilter`.
+
+5. **Use&#x20;****`ValidationAction`****&#x20;for business-level session rules.**
+
+   - E.g., restricting certain operations to specific roles or regions.
+
+6. **Use session metadata creatively but carefully.**
+
+   - `timeZoneCode`, `language`, `location`, `agent` can be used for UX and risk-based decisions (ABAC).
+
+7. **Remember remote session options** when you integrate with existing auth stacks.
+
+   - `RemoteServiceAuthentication` and `RemoteSession` make it possible to plug into corporate identity systems while still using `this.session` as Mindbricks’ unified interface.
+
+---
+
+### In short
+
+- The session is the **central runtime context** for user, tenant, and environment.
+
+- Patterns configure how it is **created**, **stored**, and **read**.
+
+- `this.session` is accessible everywhere you can write MScript or configure access logic.
+
+- By combining session with Property relations, ApiAuthOptions, membership and list filters, you get a **coherent, pattern-driven security and personalization model**—without manually writing auth middleware yourself.
+
